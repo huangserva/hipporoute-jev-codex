@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
@@ -37,8 +38,11 @@ class Decision:
     consulted_jev: bool
     identity: ThreadIdentity
     context_tokens: int
+    reason: str
     cost: SwitchGate | None = None
     would: dict[str, Any] | None = None
+    jev_ms: int | None = None
+    shadow: bool = False
 
 
 class RouterEngine:
@@ -51,6 +55,7 @@ class RouterEngine:
         jev_factory: Callable[[str], Any] | None = None,
         exists: Callable[[os.PathLike[str] | str], bool] = os.path.exists,
         now: Callable[[], datetime] | None = None,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self.config = config
         self.store = store
@@ -58,6 +63,7 @@ class RouterEngine:
         self.jev_factory = jev_factory or self._make_jev
         self.exists = exists
         self.now = now or (lambda: datetime.now(timezone.utc))
+        self.monotonic = monotonic
 
     def _make_jev(self, key: str) -> JevClient:
         return JevClient(
@@ -100,10 +106,11 @@ class RouterEngine:
             state["previous_assistant"] = facts.previous_assistant[-240:]
         return state
 
-    def _query_candidate(self, facts: RequestFacts) -> tuple[RouteCandidate, bool]:
+    def _query_candidate(self, facts: RequestFacts) -> tuple[RouteCandidate, bool, int | None]:
         key = self.key_loader()
         if not key:
-            return RouteCandidate(ASTRA, "medium", "default", "no_key"), False
+            return RouteCandidate(ASTRA, "medium", "default", "no_key"), False, None
+        started = self.monotonic()
         try:
             response = self.jev_factory(key).ask(self._jev_state(facts))
             answers = response.get("answers") if isinstance(response, dict) else None
@@ -116,14 +123,18 @@ class RouterEngine:
                 tier_answer.get("confidence"),
                 self.config.confidence_gate,
             )
-            return candidate, True
+            return candidate, True, int(round((self.monotonic() - started) * 1000))
         except Exception as exc:
-            return RouteCandidate(
-                ASTRA,
-                "medium",
-                "default",
-                f"jev_error:{type(exc).__name__}",
-            ), True
+            return (
+                RouteCandidate(
+                    ASTRA,
+                    "medium",
+                    "default",
+                    f"jev_error:{type(exc).__name__}",
+                ),
+                True,
+                int(round((self.monotonic() - started) * 1000)),
+            )
 
     def _direct_decision(
         self,
@@ -133,7 +144,17 @@ class RouterEngine:
         gate: str,
         context_tokens: int = 0,
     ) -> Decision:
-        return Decision(ASTRA, "medium", "default", gate, event, False, identity, context_tokens)
+        return Decision(
+            ASTRA,
+            "medium",
+            "default",
+            gate,
+            event,
+            False,
+            identity,
+            context_tokens,
+            reason=gate,
+        )
 
     def decide(
         self,
@@ -169,6 +190,7 @@ class RouterEngine:
                 False,
                 identity,
                 context_tokens,
+                reason="sticky",
             )
             return self._shadow(decision, stored)
 
@@ -176,11 +198,16 @@ class RouterEngine:
             policy_route = RouteCandidate(SOL, "high", "default", "compaction")
             pending_free_reroute = True
             consulted = False
+            jev_ms = None
             cost = None
+            gate = "apply"
+            reason = "compaction"
         else:
-            policy_route, consulted = self._query_candidate(facts)
+            policy_route, consulted, jev_ms = self._query_candidate(facts)
             pending_free_reroute = False
             cost = None
+            reason = policy_route.gate
+            gate = "apply" if policy_route.gate in ("jev", "low_confidence") else policy_route.gate
             if event == "new_user_turn" and stored is not None and (
                 policy_route.model != stored.model or policy_route.effort != stored.effort
             ):
@@ -199,6 +226,8 @@ class RouterEngine:
                         stored.service_tier,
                         f"cost_hold:{cost.reason}",
                     )
+                    gate = "hold"
+                    reason = cost.reason
 
         state = ThreadState(
             model=policy_route.model,
@@ -215,12 +244,14 @@ class RouterEngine:
             policy_route.model,
             policy_route.effort,
             policy_route.service_tier,
-            policy_route.gate,
+            gate,
             event,
             consulted,
             identity,
             context_tokens,
+            reason=reason,
             cost=cost,
+            jev_ms=jev_ms,
         )
         return self._shadow(decision, state)
 
@@ -232,18 +263,22 @@ class RouterEngine:
             "effort": policy_state.effort,
             "service_tier": policy_state.service_tier,
             "gate": decision.gate,
+            "reason": decision.reason,
         }
         return Decision(
             ASTRA,
             "medium",
             "default",
-            "shadow",
+            decision.gate,
             decision.event,
             decision.consulted_jev,
             decision.identity,
             decision.context_tokens,
+            reason=decision.reason,
             cost=decision.cost,
             would=would,
+            jev_ms=decision.jev_ms,
+            shadow=True,
         )
 
     def record_usage(self, thread_id: str | None, context_tokens: int | None) -> None:

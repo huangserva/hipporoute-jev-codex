@@ -47,12 +47,14 @@ def assemble_sse(raw: bytes) -> dict[str, Any] | None:
 class Usage:
     input_tokens: int | None = None
     cached_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 class SSEUsageTracker:
     def __init__(self) -> None:
         self._buffer = b""
         self.usage = Usage()
+        self.response_model: str | None = None
 
     def feed(self, raw: bytes) -> None:
         self._buffer += raw
@@ -79,13 +81,19 @@ class SSEUsageTracker:
             return
         response = event.get("response")
         response = response if isinstance(response, dict) else {}
+        model = response.get("model")
+        if isinstance(model, str):
+            self.response_model = model
         usage = response.get("usage")
         usage = usage if isinstance(usage, dict) else {}
         details = usage.get("input_tokens_details")
         details = details if isinstance(details, dict) else {}
         input_tokens = usage.get("input_tokens")
         cached_tokens = usage.get("cached_tokens", details.get("cached_tokens"))
+        output_tokens = usage.get("output_tokens")
         if isinstance(input_tokens, int):
             self.usage.input_tokens = input_tokens
         if isinstance(cached_tokens, int):
             self.usage.cached_tokens = cached_tokens
+        if isinstance(output_tokens, int):
+            self.usage.output_tokens = output_tokens

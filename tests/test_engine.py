@@ -80,18 +80,36 @@ class EngineTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def engine(self, fake=None, key="key", key_counter=None):
+    def engine(self, fake=None, key="key", key_counter=None, monotonic=None):
         def key_loader():
             if key_counter is not None:
                 key_counter.append(1)
             return key
 
+        kwargs = {}
+        if monotonic is not None:
+            kwargs["monotonic"] = monotonic
         return RouterEngine(
             self.config,
             self.store,
             key_loader=key_loader,
             jev_factory=(lambda _key: fake),
+            **kwargs,
         )
+
+    def test_successful_jev_decision_records_apply_gate_and_latency(self):
+        fake = FakeJev(
+            answers=[{"answers": {"tier": {"choice": LUNA, "confidence": 0.9}, "depth": {"choice": "low"}}}]
+        )
+        ticks = iter((10.0, 11.25))
+        engine = self.engine(fake=fake, monotonic=lambda: next(ticks))
+        headers, body = request()
+
+        decision = engine.decide(headers, body, len(json.dumps(body)))
+
+        self.assertEqual(decision.gate, "apply")
+        self.assertEqual(decision.reason, "jev")
+        self.assertEqual(decision.jev_ms, 1250)
 
     def test_no_key_fails_open_and_pins_astra_medium(self):
         engine = self.engine(fake=None, key="")
@@ -136,7 +154,8 @@ class EngineTests(unittest.TestCase):
         next_headers, next_body = request(turn=TURN_2)
         rerouted = engine.decide(next_headers, next_body, len(json.dumps(next_body)))
 
-        self.assertEqual((compact.model, compact.effort, compact.gate), (SOL, "high", "compaction"))
+        self.assertEqual((compact.model, compact.effort, compact.gate), (SOL, "high", "apply"))
+        self.assertEqual(compact.reason, "compaction")
         self.assertEqual(rerouted.event, "free_reroute")
         self.assertEqual((rerouted.model, rerouted.effort), (LUNA, "max"))
         self.assertEqual(len(fake.states), 1)
@@ -158,7 +177,8 @@ class EngineTests(unittest.TestCase):
 
         self.assertEqual(decision.event, "new_user_turn")
         self.assertEqual(decision.model, ASTRA)
-        self.assertEqual(decision.gate, "cost_hold:downgrade_context_limit")
+        self.assertEqual(decision.gate, "hold")
+        self.assertEqual(decision.reason, "downgrade_context_limit")
         self.assertEqual(self.store.get(ROOT).last_turn_id, TURN_2)
 
     def test_jev_error_fails_open(self):
@@ -185,7 +205,8 @@ class EngineTests(unittest.TestCase):
         engine = self.engine(fake=fake)
         headers, body = request()
         decision = engine.decide(headers, body, len(json.dumps(body)))
-        self.assertEqual((decision.model, decision.effort, decision.gate), (ASTRA, "medium", "shadow"))
+        self.assertEqual((decision.model, decision.effort, decision.gate), (ASTRA, "medium", "apply"))
+        self.assertTrue(decision.shadow)
         self.assertEqual(decision.would["model"], LUNA)
         self.assertEqual(self.store.get(ROOT).model, LUNA)
 

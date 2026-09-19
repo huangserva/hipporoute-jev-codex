@@ -25,9 +25,14 @@ COMPLETED = {
     "type": "response.completed",
     "response": {
         "id": "resp_1",
+        "model": "gpt-6-astra",
         "status": "completed",
         "output": [],
-        "usage": {"input_tokens": 4321, "input_tokens_details": {"cached_tokens": 4000}},
+        "usage": {
+            "input_tokens": 4321,
+            "input_tokens_details": {"cached_tokens": 4000},
+            "output_tokens": 37,
+        },
     },
 }
 SSE_BYTES = (
@@ -90,11 +95,11 @@ class ServerTests(unittest.TestCase):
         self.upstream.server_close()
         self.tmp.cleanup()
 
-    def post(self, stream):
+    def post(self, stream, content="Say OK"):
         body = {
             "model": "auto",
             "stream": stream,
-            "input": [{"type": "message", "role": "user", "content": "Say OK"}],
+            "input": [{"type": "message", "role": "user", "content": content}],
             "client_metadata": {"thread_id": "thread-1", "turn_id": "turn-1"},
         }
         headers = {
@@ -122,6 +127,7 @@ class ServerTests(unittest.TestCase):
         models_data = json.loads(models.read())
         conn.close()
         self.assertTrue(health_data["ok"])
+        self.assertIs(health_data["jev_key"], False)
         self.assertEqual(models_data["data"][0]["id"], "auto")
         self.assertEqual(models_data["models"], [])
 
@@ -157,7 +163,16 @@ class ServerTests(unittest.TestCase):
         record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
         self.assertEqual(record["gate"], "no_key")
         self.assertEqual(record["usage"]["cached_tokens"], 4000)
+        self.assertEqual(record["usage"]["output_tokens"], 37)
+        self.assertEqual(record["upstream_model"], "gpt-6-astra")
         self.assertNotIn("authorization", json.dumps(record).lower())
+
+    def test_decision_log_task_is_truncated_and_redacted(self):
+        self.post(True, "Rename value. TYPESAFE_API_KEY=super-secret " + "x" * 300)
+        record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
+        self.assertTrue(record["task"].startswith("Rename value."))
+        self.assertNotIn("super-secret", record["task"])
+        self.assertLessEqual(len(record["task"]), 160)
 
 
 if __name__ == "__main__":

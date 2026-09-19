@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -15,6 +16,7 @@ from typing import Any
 from . import __version__
 from .config import RouterConfig
 from .engine import Decision, RouterEngine
+from .policy import inspect_request
 from .state import ThreadStateStore
 from .sse import SSEUsageTracker, assemble_sse
 from .upstream import HOP_BY_HOP, UpstreamClient
@@ -53,6 +55,19 @@ class DecisionLogger:
                 os.close(descriptor)
 
 
+def task_preview(payload: dict[str, Any], limit: int = 160) -> str:
+    text = inspect_request(payload).task
+    text = re.sub(
+        r"(?i)(TYPESAFE_API_KEY\s*=\s*)[^\s,;]+",
+        r"\1[REDACTED]",
+        text,
+    )
+    text = re.sub(r"(?i)(Bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED]", text)
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]+\b", "[REDACTED]", text)
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
 @dataclass
 class RouterApp:
     config: RouterConfig
@@ -60,6 +75,7 @@ class RouterApp:
     engine: RouterEngine
     upstream: UpstreamClient
     logger: DecisionLogger
+    jev_key_loaded: bool
 
 
 def build_app(config: RouterConfig, *, key_loader=None, jev_factory=None) -> RouterApp:
@@ -80,7 +96,18 @@ def build_app(config: RouterConfig, *, key_loader=None, jev_factory=None) -> Rou
         )
     else:
         upstream = UpstreamClient.direct(config.direct_url, config.upstream_timeout_seconds)
-    return RouterApp(config, store, engine, upstream, DecisionLogger(config.decision_log_path))
+    try:
+        jev_key_loaded = bool(engine.key_loader())
+    except Exception:
+        jev_key_loaded = False
+    return RouterApp(
+        config,
+        store,
+        engine,
+        upstream,
+        DecisionLogger(config.decision_log_path),
+        jev_key_loaded,
+    )
 
 
 class RouterHTTPServer(ThreadingHTTPServer):
@@ -114,7 +141,15 @@ class RouterHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0].rstrip("/")
         if path in ("", "/health"):
-            return self._json(200, {"ok": True, "service": "codex-jev-router", "version": __version__})
+            return self._json(
+                200,
+                {
+                    "ok": True,
+                    "service": "codex-jev-router",
+                    "version": __version__,
+                    "jev_key": self.server.app.jev_key_loaded,
+                },
+            )
         if path in ("/models", "/v1/models"):
             return self._json(
                 200,
@@ -201,7 +236,10 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "is_subagent": decision.identity.is_subagent,
                     "event": decision.event,
                     "gate": decision.gate,
+                    "reason": decision.reason,
                     "consulted_jev": decision.consulted_jev,
+                    "jev_ms": decision.jev_ms,
+                    "shadow": decision.shadow,
                     "model": decision.model,
                     "effort": decision.effort,
                     "service_tier": decision.service_tier,
@@ -211,7 +249,9 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "status": status,
                     "out": out_kind,
                     "upstream_content_type": upstream_content_type,
+                    "upstream_model": tracker.response_model,
                     "usage": asdict(usage),
+                    "task": task_preview(payload),
                     "total_ms": int((time.monotonic() - started) * 1000),
                 }
             )

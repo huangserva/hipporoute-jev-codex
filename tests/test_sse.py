@@ -41,9 +41,11 @@ class SSETests(unittest.TestCase):
                 "type": "response.completed",
                 "response": {
                     "id": "resp_1",
+                    "model": "gpt-5.6-luna",
                     "usage": {
                         "input_tokens": 12345,
                         "input_tokens_details": {"cached_tokens": 12000},
+                        "output_tokens": 321,
                     },
                 },
             },
@@ -54,6 +56,8 @@ class SSETests(unittest.TestCase):
         tracker.finish()
         self.assertEqual(tracker.usage.input_tokens, 12345)
         self.assertEqual(tracker.usage.cached_tokens, 12000)
+        self.assertEqual(tracker.usage.output_tokens, 321)
+        self.assertEqual(tracker.response_model, "gpt-5.6-luna")
 
     def test_failed_sse_is_assembled_as_error(self):
         raw = event("response.failed", {"type": "response.failed", "response": {"error": {"message": "bad"}}})
