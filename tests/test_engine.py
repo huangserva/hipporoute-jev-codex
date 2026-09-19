@@ -1,7 +1,11 @@
 import json
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 from codex_jev_router.config import load_config
@@ -62,6 +66,49 @@ class StateStoreTests(unittest.TestCase):
         self.assertEqual(reloaded.model, SOL)
         self.assertEqual(reloaded.last_context_tokens, 1234)
         self.assertTrue(reloaded.pending_free_reroute)
+
+    def test_gc_removes_only_parseable_expired_states(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ThreadStateStore(Path(tmp) / "threads.json")
+            base = dict(
+                model=SOL,
+                effort="high",
+                service_tier="default",
+                last_context_tokens=1,
+                last_turn_id=TURN_1,
+                pending_free_reroute=False,
+                parent_thread_id=None,
+            )
+            store.put(
+                "expired",
+                ThreadState(
+                    **base,
+                    decided_at="2026-09-18T00:00:00Z",
+                    last_active_at="2026-09-18T00:00:00Z",
+                ),
+            )
+            store.put(
+                "active",
+                ThreadState(
+                    **base,
+                    decided_at="2026-09-19T18:00:00Z",
+                    last_active_at="2026-09-19T18:00:00Z",
+                ),
+            )
+            store.put(
+                "invalid",
+                ThreadState(**base, decided_at="not-a-time", last_active_at="also-invalid"),
+            )
+
+            removed = store.gc_expired(
+                datetime(2026, 9, 20, tzinfo=timezone.utc),
+                ttl_seconds=86_400,
+            )
+
+            self.assertEqual(removed, ["expired"])
+            self.assertIsNone(store.get("expired"))
+            self.assertIsNotNone(store.get("active"))
+            self.assertIsNotNone(store.get("invalid"))
 
 
 class EngineTests(unittest.TestCase):
@@ -208,6 +255,47 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(state.parent_tier, ASTRA)
         self.assertEqual(state.agent_name, "/root/docstring_policy")
         self.assertEqual(state.subagent_kind, "thread_spawn")
+
+    def test_concurrent_first_requests_for_same_thread_consult_jev_once(self):
+        started = threading.Event()
+        second_entered = threading.Event()
+        release = threading.Event()
+
+        class BlockingJev:
+            def __init__(self):
+                self.calls = 0
+                self.lock = threading.Lock()
+
+            def ask(self, _state, **_kwargs):
+                with self.lock:
+                    self.calls += 1
+                    call = self.calls
+                if call == 1:
+                    started.set()
+                    release.wait(2)
+                else:
+                    second_entered.set()
+                return {
+                    "answers": {
+                        "tier": {"choice": LUNA, "confidence": 0.9},
+                        "depth": {"choice": "low"},
+                    }
+                }
+
+        fake = BlockingJev()
+        engine = self.engine(fake=fake)
+        headers, body = request()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(engine.decide, headers, body, len(json.dumps(body)))
+            self.assertTrue(started.wait(1))
+            second = pool.submit(engine.decide, headers, body, len(json.dumps(body)))
+            second_entered.wait(0.2)
+            release.set()
+            decisions = [first.result(timeout=2), second.result(timeout=2)]
+
+        self.assertEqual(fake.calls, 1)
+        self.assertEqual(sorted(decision.event for decision in decisions), ["first_request", "reuse"])
 
     def test_same_turn_tool_continuation_reuses_without_loading_key(self):
         key_calls = []

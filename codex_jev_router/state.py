@@ -6,6 +6,7 @@ import json
 import os
 import threading
 from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -26,6 +27,7 @@ class ThreadState:
     delegation_task: str | None = None
     delegation_source: str | None = None
     routing_task: str = ""
+    last_active_at: str | None = None
 
 
 class ThreadStateStore:
@@ -69,11 +71,51 @@ class ThreadStateStore:
             self._save_locked()
             return changed
 
-    def update_usage(self, thread_id: str, context_tokens: int) -> ThreadState | None:
+    def touch(self, thread_id: str, at: str) -> ThreadState | None:
+        return self.update(thread_id, lambda current: replace(current, last_active_at=at))
+
+    def update_usage(
+        self,
+        thread_id: str,
+        context_tokens: int,
+        *,
+        at: str | None = None,
+    ) -> ThreadState | None:
         return self.update(
             thread_id,
-            lambda current: replace(current, last_context_tokens=max(0, int(context_tokens))),
+            lambda current: replace(
+                current,
+                last_context_tokens=max(0, int(context_tokens)),
+                last_active_at=at or current.last_active_at,
+            ),
         )
+
+    @staticmethod
+    def _timestamp(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    def gc_expired(self, now: datetime, *, ttl_seconds: int) -> list[str]:
+        current = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+        cutoff = current.astimezone(timezone.utc) - timedelta(seconds=max(0, ttl_seconds))
+        with self._lock:
+            expired = []
+            for thread_id, state in self._threads.items():
+                active = self._timestamp(state.last_active_at or state.decided_at)
+                if active is not None and active < cutoff:
+                    expired.append(thread_id)
+            for thread_id in expired:
+                del self._threads[thread_id]
+            if expired:
+                self._save_locked()
+            return sorted(expired)
 
     def _save_locked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

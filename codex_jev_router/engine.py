@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -71,6 +72,10 @@ class RouterEngine:
         self.exists = exists
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.monotonic = monotonic
+        self._thread_locks_guard = threading.Lock()
+        self._thread_locks: dict[str, threading.RLock] = {}
+        self._gc_lock = threading.Lock()
+        self._last_gc_at = 0.0
 
     def _make_jev(self, key: str) -> JevClient:
         return JevClient(
@@ -84,6 +89,20 @@ class RouterEngine:
 
     def _timestamp(self) -> str:
         return self.now().isoformat().replace("+00:00", "Z")
+
+    def _thread_lock(self, thread_id: str) -> threading.RLock:
+        with self._thread_locks_guard:
+            return self._thread_locks.setdefault(thread_id, threading.RLock())
+
+    def _maybe_gc(self) -> None:
+        current = time.monotonic()
+        if current - self._last_gc_at < self.config.state_gc_interval_seconds:
+            return
+        with self._gc_lock:
+            if current - self._last_gc_at < self.config.state_gc_interval_seconds:
+                return
+            self.store.gc_expired(self.now(), ttl_seconds=self.config.state_ttl_seconds)
+            self._last_gc_at = current
 
     @staticmethod
     def _snapshot(state: ThreadState | None) -> ThreadSnapshot | None:
@@ -234,6 +253,16 @@ class RouterEngine:
         if not identity.thread_id:
             return self._direct_decision(identity, event="identity_error", gate="missing_thread_id")
 
+        self._maybe_gc()
+        with self._thread_lock(identity.thread_id):
+            return self._decide_locked(identity, payload, body_chars)
+
+    def _decide_locked(
+        self,
+        identity: ThreadIdentity,
+        payload: Mapping[str, Any],
+        body_chars: int,
+    ) -> Decision:
         stored = self.store.get(identity.thread_id)
         context_tokens = (
             stored.last_context_tokens
@@ -249,9 +278,12 @@ class RouterEngine:
         event = choose_event(identity, self._snapshot(stored), facts)
 
         if self.exists(self.config.off_path):
+            if stored is not None:
+                self.store.touch(identity.thread_id, self._timestamp())
             return self._direct_decision(identity, event=event, gate="off", context_tokens=context_tokens)
 
         if event in ("tool_continuation", "reuse") and stored is not None:
+            stored = self.store.touch(identity.thread_id, self._timestamp()) or stored
             decision = Decision(
                 stored.model,
                 stored.effort,
@@ -310,6 +342,7 @@ class RouterEngine:
                     gate = "hold"
                     reason = cost.reason
 
+        timestamp = self._timestamp()
         state = ThreadState(
             model=policy_route.model,
             effort=policy_route.effort,
@@ -318,13 +351,14 @@ class RouterEngine:
             last_turn_id=identity.turn_id,
             pending_free_reroute=pending_free_reroute,
             parent_thread_id=identity.parent_thread_id,
-            decided_at=self._timestamp(),
+            decided_at=timestamp,
             parent_tier=parent_tier,
             agent_name=identity.agent_name,
             subagent_kind=identity.subagent_kind,
             delegation_task=routing_task if identity.is_subagent else None,
             delegation_source=delegation_source,
             routing_task=routing_task,
+            last_active_at=timestamp,
         )
         self.store.put(identity.thread_id, state)
         decision = Decision(
@@ -382,4 +416,4 @@ class RouterEngine:
 
     def record_usage(self, thread_id: str | None, context_tokens: int | None) -> None:
         if thread_id and isinstance(context_tokens, int) and context_tokens >= 0:
-            self.store.update_usage(thread_id, context_tokens)
+            self.store.update_usage(thread_id, context_tokens, at=self._timestamp())

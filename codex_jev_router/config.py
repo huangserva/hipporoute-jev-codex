@@ -36,6 +36,8 @@ class RouterConfig:
     downgrade_max_context_tokens: int
     switch_budget_usd: float
     chars_per_token: float
+    state_ttl_seconds: int
+    state_gc_interval_seconds: int
     prices: dict[str, Price]
     summary_marker: bool
 
@@ -67,6 +69,8 @@ DEFAULTS: dict[str, Any] = {
         "downgrade_max_context_tokens": 20_000,
         "switch_budget_usd": 0.25,
         "chars_per_token": 2.8,
+        "state_ttl_seconds": 86_400,
+        "state_gc_interval_seconds": 300,
         "summary_marker": False,
     },
     "prices": {
@@ -135,6 +139,8 @@ def load_config(path: str | Path | None) -> RouterConfig:
         downgrade_max_context_tokens=int(_value(data, "routing", "downgrade_max_context_tokens")),
         switch_budget_usd=float(_value(data, "routing", "switch_budget_usd")),
         chars_per_token=float(_value(data, "routing", "chars_per_token")),
+        state_ttl_seconds=int(_value(data, "routing", "state_ttl_seconds")),
+        state_gc_interval_seconds=int(_value(data, "routing", "state_gc_interval_seconds")),
         prices=prices,
         summary_marker=bool(_value(data, "routing", "summary_marker")),
     )
