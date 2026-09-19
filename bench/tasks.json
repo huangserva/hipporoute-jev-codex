@@ -100,9 +100,9 @@
     "prompt": "分析 codex_jev_router/policy.py 中 switch_gate 对预算等号、20000 token 阈值、同模型 effort 变化、未知模型和缺失价格的边界行为与风险，把具体改进建议写入 bench-policy-analysis.md，不修改代码。",
     "checks": [
       {
-        "type": "file_contains_all",
+        "type": "file_regex_all",
         "path": "bench-policy-analysis.md",
-        "values": ["预算", "20000", "effort", "unknown_model", "missing_price"]
+        "patterns": ["预算", "20[,]?000", "effort", "unknown_model", "missing_price"]
       }
     ]
   },
@@ -120,4 +120,3 @@
     ]
   }
 ]
-

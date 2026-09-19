@@ -71,12 +71,14 @@ class FixtureAndCheckTests(unittest.TestCase):
             (root / "pkg").mkdir()
             (root / "pkg" / "a.py").write_text('def f():\n    """docs"""\n    return 1\n', encoding="utf-8")
             (root / "report.txt").write_text("fixed", encoding="utf-8")
+            (root / "analysis.md").write_text("threshold: 20,000 token", encoding="utf-8")
             (root / "python-lines.txt").write_text("3 pkg/a.py\n", encoding="utf-8")
             checks = [
                 {"type": "file_contains_all", "path": "report.txt", "values": ["fixed"]},
                 {"type": "function_docstring", "path": "pkg/a.py", "function": "f"},
                 {"type": "command", "argv": ["python3", "-c", "raise SystemExit(0)"]},
                 {"type": "output_regex", "pattern": "tests.*passed"},
+                {"type": "file_regex_all", "path": "analysis.md", "patterns": [r"20[,]?000", "token"]},
                 {"type": "python_line_manifest", "paths": ["pkg"]},
             ]
             passed, details = evaluate_checks(root, checks, "All tests passed")

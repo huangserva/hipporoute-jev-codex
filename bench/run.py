@@ -123,6 +123,11 @@ def evaluate_checks(
                 presence = [value in text for value in check["values"]]
                 passed = all(presence) if kind == "file_contains_all" else not any(presence)
                 message = f"presence={presence}"
+            elif kind == "file_regex_all":
+                text = (root / check["path"]).read_text(encoding="utf-8")
+                matches = [re.search(pattern, text) is not None for pattern in check["patterns"]]
+                passed = all(matches)
+                message = f"matches={matches}"
             elif kind == "function_docstring":
                 tree = ast.parse((root / check["path"]).read_text(encoding="utf-8"))
                 function = _find_function(tree, check["function"])
