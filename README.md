@@ -6,7 +6,7 @@
 
 ## 能力
 
-- `GET /health`
+- `GET /health`（只返回 Jev key 是否已加载的布尔值，不返回 key）
 - `GET /v1/models`（同时返回 Codex CLI 所需的 `models` 字段与 OpenAI 风格的 `data`）
 - `POST /v1/responses`
 - 强制上游 `stream: true`，逐字节 SSE 透传并重新声明 `Content-Type`
@@ -148,10 +148,10 @@ rm ~/.codex/codex-jev-router/router.off
 rm ~/.codex/codex-jev-router/router.shadow
 ```
 
-线程状态默认在 `~/.codex/codex-jev-router/threads.json`，决策日志默认在 `~/.codex/codex-jev-router/decisions.jsonl`。日志不保存请求正文和认证 header，字段包括线程/轮次/父线程、事件、关卡、实际路由、成本、响应状态、usage 与耗时。示例：
+线程状态默认在 `~/.codex/codex-jev-router/threads.json`，决策日志默认在 `~/.codex/codex-jev-router/decisions.jsonl`。日志不保存完整请求正文和认证 header；`task` 仅保留最多 160 字符的脱敏预览。字段包括线程/轮次/父线程、事件、`apply/hold/sticky` 关卡、原因、shadow/would、Jev 耗时、实际路由、SSE completed model、usage 与总耗时。示例：
 
 ```json
-{"thread_id":"thread-main…","turn_id":"turn-1…","parent_thread_id":null,"event":"first_request","gate":"no_key","consulted_jev":false,"model":"gpt-6-astra","effort":"medium","status":200,"out":"sse","usage":{"input_tokens":16313,"cached_tokens":0}}
+{"thread_id":"thread-main…","turn_id":"turn-1…","parent_thread_id":null,"event":"first_request","gate":"apply","reason":"jev","consulted_jev":true,"jev_ms":1106,"model":"gpt-5.6-luna","effort":"max","upstream_model":"gpt-5.6-luna","response_completed":true,"status":200,"out":"sse","usage":{"input_tokens":16268,"cached_tokens":0,"output_tokens":824}}
 ```
 
 ## 真实端到端验证（2026-09-19）
@@ -175,4 +175,3 @@ python3 -m compileall -q codex_jev_router tests
 ```
 
 测试使用本地假 Jev 与假上游，不访问网络，覆盖四个决策时机、工具续跑、成本关卡、身份样例、Jev 重试和 fail-open、SSE 透传/组装、代理 CONNECT、状态和 HTTP 端点。
-

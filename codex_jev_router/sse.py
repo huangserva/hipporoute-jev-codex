@@ -55,6 +55,7 @@ class SSEUsageTracker:
         self._buffer = b""
         self.usage = Usage()
         self.response_model: str | None = None
+        self.response_completed = False
 
     def feed(self, raw: bytes) -> None:
         self._buffer += raw
@@ -79,6 +80,7 @@ class SSEUsageTracker:
             return
         if not isinstance(event, dict) or event.get("type") != "response.completed":
             return
+        self.response_completed = True
         response = event.get("response")
         response = response if isinstance(response, dict) else {}
         model = response.get("model")

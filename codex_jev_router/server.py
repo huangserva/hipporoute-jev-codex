@@ -250,6 +250,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "out": out_kind,
                     "upstream_content_type": upstream_content_type,
                     "upstream_model": tracker.response_model,
+                    "response_completed": tracker.response_completed,
                     "usage": asdict(usage),
                     "task": task_preview(payload),
                     "total_ms": int((time.monotonic() - started) * 1000),

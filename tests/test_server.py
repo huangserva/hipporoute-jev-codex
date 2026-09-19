@@ -165,6 +165,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(record["usage"]["cached_tokens"], 4000)
         self.assertEqual(record["usage"]["output_tokens"], 37)
         self.assertEqual(record["upstream_model"], "gpt-6-astra")
+        self.assertTrue(record["response_completed"])
         self.assertNotIn("authorization", json.dumps(record).lower())
 
     def test_decision_log_task_is_truncated_and_redacted(self):

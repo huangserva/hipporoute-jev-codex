@@ -58,6 +58,13 @@ class SSETests(unittest.TestCase):
         self.assertEqual(tracker.usage.cached_tokens, 12000)
         self.assertEqual(tracker.usage.output_tokens, 321)
         self.assertEqual(tracker.response_model, "gpt-5.6-luna")
+        self.assertTrue(tracker.response_completed)
+
+    def test_tracker_marks_stream_without_completed_event(self):
+        tracker = SSEUsageTracker()
+        tracker.feed(event("response.output_text.done", {"type": "response.output_text.done"}))
+        tracker.finish()
+        self.assertFalse(tracker.response_completed)
 
     def test_failed_sse_is_assembled_as_error(self):
         raw = event("response.failed", {"type": "response.failed", "response": {"error": {"message": "bad"}}})

@@ -11,7 +11,8 @@
 - 实现切换成本预算与 20000 token 降级硬阈值；价格、预算和阈值可配置。
 - 实现线程状态内存存储与原子 JSON 落盘、kill switch、shadow 文件哨兵、0600 JSONL 决策日志。
 - 实现 Codex Router caller edge 与 ChatGPT Codex 直连两种上游；HTTPS 直连遵守环境代理。
-- 完成 44 项离线单元测试。
+- 完成 50 项离线单元测试。
+- 用真实 Jev key 完成 shadow 与真路由对照；`response.completed.model` 证明 luna/astra 实际切换，详见 `docs/2026-09-19-真实Jev端到端.md`。
 - 完成 Codex CLI 0.155.1 真实端到端：两个用户轮次、至少两次工具续跑和一个原生子 agent；无 Jev key 时决策点均正确记为 `no_key` 并走 `astra@medium`。
 - 端到端实验后已恢复 `~/.codex/config.toml`，恢复文件与实验前备份的 SHA-256 一致。
 
@@ -40,4 +41,3 @@
 4. 加 per-thread 锁、状态 TTL/GC、并发压力测试和崩溃恢复测试。
 5. 在安装了 Codex Router 的机器上做 caller edge 真实验收，验证 caller secret、shared session、目录刷新和服务托管。
 6. 在真实流量的 shadow 模式比较 `would` 与现有路由的质量、成本和切换率，确认阈值后再启用实际分档。
-

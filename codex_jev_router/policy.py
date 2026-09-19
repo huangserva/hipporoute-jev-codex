@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Mapping
 
 
@@ -73,8 +74,8 @@ class Price:
 class SwitchGate:
     allowed: bool
     reason: str
-    stay_cost: float
-    switch_cost: float
+    stay_cost: float | None
+    switch_cost: float | None
 
 
 def _json_object(value: Any) -> dict[str, Any]:
@@ -244,9 +245,16 @@ def switch_gate(
     budget_usd: float,
     downgrade_max_context_tokens: int,
 ) -> SwitchGate:
+    if current_model not in TIER_RANK or target_model not in TIER_RANK:
+        return SwitchGate(False, "unknown_model", None, None)
+    if current_model not in prices or target_model not in prices:
+        return SwitchGate(False, "missing_price", None, None)
     if TIER_RANK[target_model] < TIER_RANK[current_model] and context_tokens > downgrade_max_context_tokens:
         return SwitchGate(False, "downgrade_context_limit", 0.0, 0.0)
-    stay_cost = context_tokens * prices[current_model].cache_read / 1_000_000
-    switch_cost = context_tokens * prices[target_model].cache_write / 1_000_000
-    allowed = switch_cost - stay_cost <= budget_usd
+    token_factor = Decimal(context_tokens) / Decimal(1_000_000)
+    stay_decimal = token_factor * Decimal(str(prices[current_model].cache_read))
+    switch_decimal = token_factor * Decimal(str(prices[target_model].cache_write))
+    allowed = switch_decimal - stay_decimal <= Decimal(str(budget_usd))
+    stay_cost = float(stay_decimal)
+    switch_cost = float(switch_decimal)
     return SwitchGate(allowed, "affordable" if allowed else "switch_budget", stay_cost, switch_cost)

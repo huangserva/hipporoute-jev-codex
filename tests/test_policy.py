@@ -188,6 +188,28 @@ class CandidateAndCostTests(unittest.TestCase):
         self.assertEqual(gate.reason, "switch_budget")
         self.assertAlmostEqual(gate.switch_cost - gate.stay_cost, 1.248)
 
+    def test_decimal_budget_equality_is_allowed(self):
+        prices = {
+            SOL: Price(cache_read=0.7, cache_write=1.0),
+            ASTRA: Price(cache_read=1.0, cache_write=1.0),
+        }
+        gate = switch_gate(1_000_000, SOL, ASTRA, prices, 0.3, 2_000_000)
+        self.assertTrue(gate.allowed)
+        self.assertEqual(gate.reason, "affordable")
+
+    def test_unknown_model_is_a_safe_hold(self):
+        gate = switch_gate(1000, SOL, "unknown", self.prices, 0.25, 20_000)
+        self.assertFalse(gate.allowed)
+        self.assertEqual(gate.reason, "unknown_model")
+        self.assertIsNone(gate.stay_cost)
+        self.assertIsNone(gate.switch_cost)
+
+    def test_missing_price_is_a_safe_hold(self):
+        gate = switch_gate(1000, SOL, ASTRA, {SOL: self.prices[SOL]}, 0.25, 20_000)
+        self.assertFalse(gate.allowed)
+        self.assertEqual(gate.reason, "missing_price")
+        self.assertIsNone(gate.switch_cost)
+
     def test_affordable_switch_is_allowed(self):
         gate = switch_gate(20_000, ASTRA, SOL, self.prices, 0.25, 20_000)
         self.assertTrue(gate.allowed)
