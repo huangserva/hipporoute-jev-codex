@@ -16,6 +16,7 @@ from .policy import (
     SOL,
     RequestFacts,
     RouteCandidate,
+    SpawnDelegation,
     SwitchGate,
     ThreadIdentity,
     ThreadSnapshot,
@@ -23,6 +24,7 @@ from .policy import (
     choose_event,
     estimate_context_tokens,
     extract_new_task_delegation,
+    extract_spawn_delegations,
     inspect_request,
     resolve_identity,
     switch_gate,
@@ -76,6 +78,8 @@ class RouterEngine:
         self._thread_locks: dict[str, threading.RLock] = {}
         self._gc_lock = threading.Lock()
         self._last_gc_at = 0.0
+        self._delegation_lock = threading.Lock()
+        self._delegations: dict[tuple[str, str], tuple[SpawnDelegation, float]] = {}
 
     def _make_jev(self, key: str) -> JevClient:
         return JevClient(
@@ -102,7 +106,49 @@ class RouterEngine:
             if current - self._last_gc_at < self.config.state_gc_interval_seconds:
                 return
             self.store.gc_expired(self.now(), ttl_seconds=self.config.state_ttl_seconds)
+            with self._delegation_lock:
+                expired = [key for key, (_, deadline) in self._delegations.items() if deadline < current]
+                for key in expired:
+                    del self._delegations[key]
             self._last_gc_at = current
+
+    @staticmethod
+    def _agent_key(agent_name: str | None) -> str | None:
+        if not agent_name:
+            return None
+        return agent_name.strip("/").rsplit("/", 1)[-1] or None
+
+    def record_delegations(
+        self,
+        parent_thread_id: str | None,
+        delegations: list[SpawnDelegation],
+    ) -> None:
+        if not parent_thread_id:
+            return
+        deadline = time.monotonic() + self.config.state_ttl_seconds
+        with self._delegation_lock:
+            for delegation in delegations:
+                key = self._agent_key(delegation.agent_name)
+                if key and delegation.task:
+                    self._delegations[(parent_thread_id, key)] = (delegation, deadline)
+
+    def _cached_delegation(
+        self,
+        parent_thread_id: str | None,
+        agent_name: str | None,
+    ) -> SpawnDelegation | None:
+        key = self._agent_key(agent_name)
+        if not parent_thread_id or not key:
+            return None
+        with self._delegation_lock:
+            found = self._delegations.get((parent_thread_id, key))
+            if found is None:
+                return None
+            delegation, deadline = found
+            if deadline < time.monotonic():
+                del self._delegations[(parent_thread_id, key)]
+                return None
+            return delegation
 
     @staticmethod
     def _snapshot(state: ThreadState | None) -> ThreadSnapshot | None:
@@ -224,6 +270,9 @@ class RouterEngine:
         if new_task is not None and new_task.task:
             routing_task = new_task.task
             source = new_task.source
+        elif cached := self._cached_delegation(identity.parent_thread_id, agent_name):
+            routing_task = cached.task or ""
+            source = cached.source
         else:
             parent_task = parent.routing_task if parent is not None and parent.routing_task else facts.task
             routing_task = (
@@ -255,6 +304,8 @@ class RouterEngine:
 
         self._maybe_gc()
         with self._thread_lock(identity.thread_id):
+            if not identity.is_subagent:
+                self.record_delegations(identity.thread_id, extract_spawn_delegations(payload))
             return self._decide_locked(identity, payload, body_chars)
 
     def _decide_locked(

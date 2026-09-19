@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
+
+from .policy import SpawnDelegation, extract_spawn_delegations
 
 
 def _events(raw: bytes):
@@ -51,11 +53,13 @@ class Usage:
 
 
 class SSEUsageTracker:
-    def __init__(self) -> None:
+    def __init__(self, *, on_spawn: Callable[[SpawnDelegation], None] | None = None) -> None:
         self._buffer = b""
         self.usage = Usage()
         self.response_model: str | None = None
         self.response_completed = False
+        self.spawn_delegations: list[SpawnDelegation] = []
+        self._on_spawn = on_spawn
 
     def feed(self, raw: bytes) -> None:
         self._buffer += raw
@@ -78,7 +82,14 @@ class SSEUsageTracker:
             event = json.loads(chunk.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
             return
-        if not isinstance(event, dict) or event.get("type") != "response.completed":
+        if not isinstance(event, dict):
+            return
+        if event.get("type") == "response.output_item.done" and isinstance(event.get("item"), dict):
+            for delegation in extract_spawn_delegations({"input": [event["item"]]}):
+                self.spawn_delegations.append(delegation)
+                if self._on_spawn is not None:
+                    self._on_spawn(delegation)
+        if event.get("type") != "response.completed":
             return
         self.response_completed = True
         response = event.get("response")

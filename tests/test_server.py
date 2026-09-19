@@ -95,20 +95,23 @@ class ServerTests(unittest.TestCase):
         self.upstream.server_close()
         self.tmp.cleanup()
 
-    def post(self, stream, content="Say OK"):
+    def post(self, stream, content="Say OK", *, thread_id="thread-1", metadata_extra=None, input_items=None):
+        metadata = {"thread_id": thread_id, "turn_id": "turn-1", "thread_source": "user"}
+        metadata.update(metadata_extra or {})
         body = {
             "model": "auto",
             "stream": stream,
-            "input": [{"type": "message", "role": "user", "content": content}],
-            "client_metadata": {"thread_id": "thread-1", "turn_id": "turn-1"},
+            "input": input_items or [{"type": "message", "role": "user", "content": content}],
+            "client_metadata": {"thread_id": thread_id, "turn_id": "turn-1"},
         }
         headers = {
             "Content-Type": "application/json",
-            "thread-id": "thread-1",
-            "x-codex-turn-metadata": json.dumps(
-                {"thread_id": "thread-1", "turn_id": "turn-1", "thread_source": "user"}
-            ),
+            "thread-id": thread_id,
+            "x-codex-turn-metadata": json.dumps(metadata),
         }
+        if metadata.get("parent_thread_id"):
+            headers["x-codex-parent-thread-id"] = metadata["parent_thread_id"]
+            headers["x-openai-subagent"] = "collab_spawn"
         conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
         conn.request("POST", "/v1/responses", json.dumps(body), headers)
         response = conn.getresponse()
@@ -168,6 +171,46 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(record["response_completed"])
         self.assertIsNone(record["jev"])
         self.assertNotIn("authorization", json.dumps(record).lower())
+
+    def test_subagent_log_contains_parent_chain_and_routing_source(self):
+        self.post(True, "Coordinate a hard task", thread_id="parent")
+        child_items = [
+            {"type": "message", "role": "user", "content": "Coordinate a hard task"},
+            {
+                "type": "agent_message",
+                "author": "/root",
+                "recipient": "/root/docstring_policy",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Message Type: NEW_TASK\nTask name: /root/docstring_policy\n"
+                            "Sender: /root\nPayload:\n"
+                        ),
+                    },
+                    {"type": "encrypted_content", "encrypted_content": "gAAAAAopaque"},
+                ],
+            },
+        ]
+        self.post(
+            True,
+            thread_id="child",
+            metadata_extra={
+                "thread_source": "subagent",
+                "parent_thread_id": "parent",
+                "agent_name": "/root/docstring_policy",
+                "subagent_kind": "thread_spawn",
+            },
+            input_items=child_items,
+        )
+
+        record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
+        self.assertEqual(record["parent_thread_id"], "parent")
+        self.assertEqual(record["parent_tier"], "gpt-6-astra")
+        self.assertEqual(record["agent_name"], "/root/docstring_policy")
+        self.assertEqual(record["subagent_kind"], "thread_spawn")
+        self.assertEqual(record["delegation_source"], "agent_name_fallback")
+        self.assertIn("docstring_policy", record["routing_task"])
 
     def test_decision_log_task_is_truncated_and_redacted(self):
         self.post(True, "Rename value. TYPESAFE_API_KEY=super-secret " + "x" * 300)

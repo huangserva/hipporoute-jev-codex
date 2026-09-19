@@ -10,7 +10,7 @@ from pathlib import Path
 
 from codex_jev_router.config import load_config
 from codex_jev_router.engine import RouterEngine
-from codex_jev_router.policy import ASTRA, LUNA, SOL
+from codex_jev_router.policy import ASTRA, LUNA, SOL, SpawnDelegation
 from codex_jev_router.state import ThreadState, ThreadStateStore
 
 
@@ -255,6 +255,62 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(state.parent_tier, ASTRA)
         self.assertEqual(state.agent_name, "/root/docstring_policy")
         self.assertEqual(state.subagent_kind, "thread_spawn")
+
+    def test_subagent_prefers_cached_plaintext_spawn_message(self):
+        parent_headers, parent_body = request()
+        parent = self.engine(
+            fake=FakeJev(
+                answers=[
+                    {
+                        "answers": {
+                            "tier": {"choice": ASTRA, "confidence": 0.9},
+                            "depth": {"choice": "high"},
+                        }
+                    }
+                ]
+            )
+        )
+        parent.decide(parent_headers, parent_body, len(json.dumps(parent_body)))
+        fake = FakeJev(
+            answers=[
+                {
+                    "answers": {
+                        "tier": {"choice": LUNA, "confidence": 0.95},
+                        "depth": {"choice": "low"},
+                    }
+                }
+            ]
+        )
+        engine = self.engine(fake=fake)
+        engine.record_delegations(
+            ROOT,
+            [SpawnDelegation("docstring_policy", "Add one precise docstring.", "spawn_message")],
+        )
+        child = "thread-child-cached"
+        metadata = {
+            "thread_id": child,
+            "turn_id": "child-turn",
+            "parent_thread_id": ROOT,
+            "agent_name": "/root/docstring_policy",
+            "subagent_kind": "thread_spawn",
+            "thread_source": "subagent",
+        }
+        child_headers = {
+            "thread-id": child,
+            "x-codex-parent-thread-id": ROOT,
+            "x-openai-subagent": "collab_spawn",
+            "x-codex-turn-metadata": json.dumps(metadata),
+        }
+        child_body = {
+            "client_metadata": {"thread_id": child, "turn_id": "child-turn"},
+            "input": [{"type": "message", "role": "user", "content": "Hard parent task"}],
+        }
+
+        decision = engine.decide(child_headers, child_body, len(json.dumps(child_body)))
+
+        self.assertEqual(decision.routing_task, "Add one precise docstring.")
+        self.assertEqual(decision.delegation_source, "spawn_message")
+        self.assertEqual(fake.states[0]["task"], "Add one precise docstring.")
 
     def test_concurrent_first_requests_for_same_thread_consult_jev_once(self):
         started = threading.Event()

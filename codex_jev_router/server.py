@@ -55,8 +55,7 @@ class DecisionLogger:
                 os.close(descriptor)
 
 
-def task_preview(payload: dict[str, Any], limit: int = 160) -> str:
-    text = inspect_request(payload).task
+def text_preview(text: str, limit: int = 160) -> str:
     text = re.sub(
         r"(?i)(TYPESAFE_API_KEY\s*=\s*)[^\s,;]+",
         r"\1[REDACTED]",
@@ -66,6 +65,10 @@ def task_preview(payload: dict[str, Any], limit: int = 160) -> str:
     text = re.sub(r"\bsk-[A-Za-z0-9_-]+\b", "[REDACTED]", text)
     text = " ".join(text.split())
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def task_preview(payload: dict[str, Any], limit: int = 160) -> str:
+    return text_preview(inspect_request(payload).task, limit)
 
 
 @dataclass
@@ -217,7 +220,12 @@ class RouterHandler(BaseHTTPRequestHandler):
         status = 0
         out_kind = ""
         upstream_content_type = ""
-        tracker = SSEUsageTracker()
+        tracker = SSEUsageTracker(
+            on_spawn=lambda delegation: self.server.app.engine.record_delegations(
+                decision.identity.thread_id,
+                [delegation],
+            )
+        )
         recorded = False
 
         def finish_record() -> None:
@@ -233,6 +241,10 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "thread_id": decision.identity.thread_id,
                     "turn_id": decision.identity.turn_id,
                     "parent_thread_id": decision.identity.parent_thread_id,
+                    "parent_tier": decision.parent_tier,
+                    "agent_name": decision.agent_name,
+                    "subagent_kind": decision.subagent_kind,
+                    "delegation_source": decision.delegation_source,
                     "is_subagent": decision.identity.is_subagent,
                     "event": decision.event,
                     "gate": decision.gate,
@@ -253,7 +265,8 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "upstream_model": tracker.response_model,
                     "response_completed": tracker.response_completed,
                     "usage": asdict(usage),
-                    "task": task_preview(payload),
+                    "task": text_preview(decision.routing_task),
+                    "routing_task": text_preview(decision.routing_task),
                     "total_ms": int((time.monotonic() - started) * 1000),
                 }
             )

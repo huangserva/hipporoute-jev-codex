@@ -9,6 +9,36 @@ def event(name, payload):
 
 
 class SSETests(unittest.TestCase):
+    def test_tracker_observes_spawn_delegation_before_stream_finishes(self):
+        seen = []
+        raw = event(
+            "response.output_item.done",
+            {
+                "type": "response.output_item.done",
+                "output_index": 0,
+                "item": {
+                    "type": "function_call",
+                    "namespace": "collaboration",
+                    "name": "spawn_agent",
+                    "arguments": json.dumps(
+                        {
+                            "task_name": "docstring_policy",
+                            "message": "Add a docstring to inspect_request.",
+                        }
+                    ),
+                },
+            },
+        )
+        tracker = SSEUsageTracker(on_spawn=seen.append)
+
+        for index in range(0, len(raw), 5):
+            tracker.feed(raw[index : index + 5])
+
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0].agent_name, "docstring_policy")
+        self.assertEqual(seen[0].task, "Add a docstring to inspect_request.")
+        self.assertEqual(tracker.spawn_delegations, seen)
+
     def test_assemble_sse_uses_completed_response_and_fills_output(self):
         raw = b"".join(
             [
