@@ -1,0 +1,47 @@
+[
+  {
+    "id": "s1_parallel_docstrings",
+    "expected_children": 3,
+    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个子 agent，task_name 分别为 docstring_policy、docstring_sse、docstring_upstream，分别只给 codex_jev_router/policy.py 的 inspect_request、codex_jev_router/sse.py 的 assemble_sse、codex_jev_router/upstream.py 的 UpstreamClient.open_response 补一条准确简短的 docstring；等待全部完成后运行相关单测，父线程不要亲自改代码。",
+    "checks": [
+      {"type": "function_docstring", "path": "codex_jev_router/policy.py", "function": "inspect_request"},
+      {"type": "function_docstring", "path": "codex_jev_router/sse.py", "function": "assemble_sse"},
+      {"type": "function_docstring", "path": "codex_jev_router/upstream.py", "function": "open_response"},
+      {"type": "command", "argv": ["python3", "-m", "unittest", "-q", "tests.test_policy", "tests.test_sse", "tests.test_upstream"]}
+    ]
+  },
+  {
+    "id": "s2_parallel_tests",
+    "expected_children": 3,
+    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个只读子 agent，task_name 分别为 test_policy、test_server、test_engine，让它们分别运行 python3 -m unittest -q tests.test_policy、tests.test_server、tests.test_engine；等待结果后由父线程把严格 JSON 对象 {\"test_policy\":\"PASS\",\"test_server\":\"PASS\",\"test_engine\":\"PASS\"} 写到 fanout-test-results.json，任何失败则对应值写 FAIL。",
+    "checks": [
+      {"type": "command", "argv": ["python3", "-c", "import json; d=json.load(open('fanout-test-results.json')); assert d == {'test_policy':'PASS','test_server':'PASS','test_engine':'PASS'}"]}
+    ]
+  },
+  {
+    "id": "s3_parallel_typos",
+    "expected_children": 2,
+    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好两个子 agent，task_name 分别为 fix_readme_switch 和 fix_status_issue；前者只修 README.md 中的“运行开官”为“运行开关”，后者只修 STATUS.md 中的“已知问提”为“已知问题”，等待两者完成，父线程不要亲自编辑。",
+    "prepare": [
+      {"type": "replace", "path": "README.md", "find": "## 运行开关", "replace": "## 运行开官", "count": 1},
+      {"type": "replace", "path": "STATUS.md", "find": "## 已知问题", "replace": "## 已知问提", "count": 1}
+    ],
+    "checks": [
+      {"type": "file_contains_all", "path": "README.md", "values": ["## 运行开关"]},
+      {"type": "file_not_contains_all", "path": "README.md", "values": ["运行开官"]},
+      {"type": "file_contains_all", "path": "STATUS.md", "values": ["## 已知问题"]},
+      {"type": "file_not_contains_all", "path": "STATUS.md", "values": ["已知问提"]}
+    ]
+  },
+  {
+    "id": "s4_mixed_fanout",
+    "expected_children": 3,
+    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个子 agent：task_name=config_docstring 的子 agent 只给 codex_jev_router/config.py 的 _section 补 docstring，task_name=run_jev_tests 的只读子 agent 运行 python3 -m unittest -q tests.test_jev 并把 PASS 或 FAIL 写入 jev-test-status.txt，task_name=audit_gc_edges 的子 agent 审计 ThreadStateStore.gc_expired 并把包含 TTL、strictly older、invalid timestamp 三个短语的边界结论写入 gc-analysis.md；等待全部完成并运行相关测试，父线程不要代做。",
+    "checks": [
+      {"type": "function_docstring", "path": "codex_jev_router/config.py", "function": "_section"},
+      {"type": "file_contains_all", "path": "jev-test-status.txt", "values": ["PASS"]},
+      {"type": "file_regex_all", "path": "gc-analysis.md", "patterns": ["TTL", "strictly older", "invalid timestamp"]},
+      {"type": "command", "argv": ["python3", "-m", "unittest", "-q", "tests.test_config", "tests.test_jev", "tests.test_engine"]}
+    ]
+  }
+]
