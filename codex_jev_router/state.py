@@ -20,6 +20,12 @@ class ThreadState:
     pending_free_reroute: bool
     parent_thread_id: str | None
     decided_at: str
+    parent_tier: str | None = None
+    agent_name: str | None = None
+    subagent_kind: str | None = None
+    delegation_task: str | None = None
+    delegation_source: str | None = None
+    routing_task: str = ""
 
 
 class ThreadStateStore:

@@ -6,6 +6,7 @@ import json
 import os
 import time
 import urllib.request
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -44,6 +45,19 @@ QUESTIONS = {
         },
     },
 }
+
+
+def questions_for(*, is_subagent: bool) -> dict[str, Any]:
+    questions = deepcopy(QUESTIONS)
+    if not is_subagent:
+        return questions
+    prefix = (
+        "This is a delegated subtask. Judge only the delegated subtask. "
+        "The parent tier is context, not a default. Do not inherit the parent model or depth. "
+    )
+    for question in questions.values():
+        question["instructions"] = prefix + question["instructions"]
+    return questions
 
 
 def load_key(
@@ -87,9 +101,14 @@ class JevClient:
         self.opener = opener
         self.sleeper = sleeper
 
-    def ask(self, state: dict[str, Any]) -> dict[str, Any]:
+    def ask(
+        self,
+        state: dict[str, Any],
+        *,
+        questions: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         body = json.dumps(
-            {"model": self.model, "state": state, "questions": QUESTIONS},
+            {"model": self.model, "state": state, "questions": questions or QUESTIONS},
             ensure_ascii=False,
             separators=(",", ":"),
         ).encode("utf-8")

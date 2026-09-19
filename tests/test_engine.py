@@ -32,7 +32,7 @@ class FakeJev:
         self.error = error
         self.states = []
 
-    def ask(self, state):
+    def ask(self, state, **kwargs):
         self.states.append(state)
         if self.error:
             raise self.error
@@ -127,6 +127,87 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(decision.event, "first_request")
         self.assertFalse(decision.consulted_jev)
         self.assertEqual(self.store.get(ROOT).model, ASTRA)
+
+    def test_subagent_uses_delegation_context_and_does_not_inherit_parent_model(self):
+        parent_headers, parent_body = request()
+        parent = self.engine(
+            fake=FakeJev(
+                answers=[
+                    {
+                        "answers": {
+                            "tier": {"choice": ASTRA, "confidence": 0.9},
+                            "depth": {"choice": "high"},
+                        }
+                    }
+                ]
+            )
+        )
+        parent.decide(parent_headers, parent_body, len(json.dumps(parent_body)))
+        fake = FakeJev(
+            answers=[
+                {
+                    "answers": {
+                        "tier": {"choice": LUNA, "confidence": 0.95},
+                        "depth": {"choice": "low"},
+                    }
+                }
+            ]
+        )
+        engine = self.engine(fake=fake)
+        child = "thread-child"
+        metadata = {
+            "thread_id": child,
+            "turn_id": "child-turn",
+            "parent_thread_id": ROOT,
+            "agent_name": "/root/docstring_policy",
+            "subagent_kind": "thread_spawn",
+            "thread_source": "subagent",
+        }
+        child_headers = {
+            "thread-id": child,
+            "x-codex-parent-thread-id": ROOT,
+            "x-openai-subagent": "collab_spawn",
+            "x-codex-turn-metadata": json.dumps(metadata),
+        }
+        child_body = {
+            "client_metadata": {"thread_id": child, "turn_id": "child-turn"},
+            "input": [
+                {"type": "message", "role": "user", "content": "Coordinate a hard migration."},
+                {
+                    "type": "agent_message",
+                    "author": "/root",
+                    "recipient": "/root/docstring_policy",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Message Type: NEW_TASK\nTask name: /root/docstring_policy\n"
+                                "Sender: /root\nPayload:\n"
+                            ),
+                        },
+                        {"type": "encrypted_content", "encrypted_content": "gAAAAAopaque"},
+                    ],
+                },
+            ],
+        }
+
+        decision = engine.decide(child_headers, child_body, len(json.dumps(child_body)))
+
+        self.assertEqual(decision.event, "subagent_first")
+        self.assertEqual(decision.model, LUNA)
+        self.assertEqual(decision.parent_tier, ASTRA)
+        self.assertEqual(decision.agent_name, "/root/docstring_policy")
+        self.assertEqual(decision.subagent_kind, "thread_spawn")
+        self.assertEqual(decision.delegation_source, "agent_name_fallback")
+        self.assertIn("docstring_policy", decision.routing_task)
+        self.assertIn("Parent task context", decision.routing_task)
+        self.assertTrue(fake.states[0]["delegation"]["is_subagent"])
+        self.assertEqual(fake.states[0]["delegation"]["parent_tier"], ASTRA)
+        state = self.store.get(child)
+        self.assertEqual(state.model, LUNA)
+        self.assertEqual(state.parent_tier, ASTRA)
+        self.assertEqual(state.agent_name, "/root/docstring_policy")
+        self.assertEqual(state.subagent_kind, "thread_spawn")
 
     def test_same_turn_tool_continuation_reuses_without_loading_key(self):
         key_calls = []

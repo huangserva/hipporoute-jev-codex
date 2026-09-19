@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from codex_jev_router.jev import JevClient, load_key
+from codex_jev_router.jev import JevClient, load_key, questions_for
 
 
 class FakeResponse:
@@ -21,6 +21,13 @@ class FakeResponse:
 
 
 class JevTests(unittest.TestCase):
+    def test_subagent_questions_explicitly_judge_delegated_task(self):
+        questions = questions_for(is_subagent=True)
+
+        self.assertIn("delegated subtask", questions["tier"]["instructions"])
+        self.assertIn("Do not inherit", questions["tier"]["instructions"])
+        self.assertIn("delegated subtask", questions["depth"]["instructions"])
+
     def test_environment_key_wins_over_env_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / ".jev.env"

@@ -30,6 +30,8 @@ class ThreadIdentity:
     conflict: bool
     sources: dict[str, str]
     metadata: dict[str, Any]
+    agent_name: str | None
+    subagent_kind: str | None
 
 
 @dataclass(frozen=True)
@@ -139,6 +141,10 @@ def resolve_identity(headers: Mapping[str, str], payload: Mapping[str, Any]) -> 
         conflict=conflict,
         sources=sources,
         metadata=metadata,
+        agent_name=metadata.get("agent_name") if isinstance(metadata.get("agent_name"), str) else None,
+        subagent_kind=(
+            metadata.get("subagent_kind") if isinstance(metadata.get("subagent_kind"), str) else None
+        ),
     )
 
 

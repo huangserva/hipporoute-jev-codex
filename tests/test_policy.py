@@ -78,6 +78,7 @@ class IdentityTests(unittest.TestCase):
                         "turn_id": "child-turn",
                         "parent_thread_id": ROOT,
                         "parent_turn_id": TURN_1,
+                        "agent_name": "/root/child",
                         "thread_source": "subagent",
                         "subagent_kind": "thread_spawn",
                     }
@@ -87,6 +88,8 @@ class IdentityTests(unittest.TestCase):
         identity = resolve_identity(child_headers, payload(CHILD, "child-turn"))
         self.assertTrue(identity.is_subagent)
         self.assertEqual(identity.parent_thread_id, ROOT)
+        self.assertEqual(identity.agent_name, "/root/child")
+        self.assertEqual(identity.subagent_kind, "thread_spawn")
         self.assertFalse(identity.conflict)
 
 

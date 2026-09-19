@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
 from .config import RouterConfig
-from .jev import JevClient, load_key
+from .jev import JevClient, load_key, questions_for
 from .policy import (
     ASTRA,
     SOL,
@@ -21,6 +21,7 @@ from .policy import (
     candidate_from_jev,
     choose_event,
     estimate_context_tokens,
+    extract_new_task_delegation,
     inspect_request,
     resolve_identity,
     switch_gate,
@@ -44,6 +45,11 @@ class Decision:
     jev_ms: int | None = None
     shadow: bool = False
     jev: dict[str, Any] | None = None
+    parent_tier: str | None = None
+    agent_name: str | None = None
+    subagent_kind: str | None = None
+    delegation_source: str | None = None
+    routing_task: str = ""
 
 
 class RouterEngine:
@@ -93,9 +99,13 @@ class RouterEngine:
         )
 
     @staticmethod
-    def _jev_state(facts: RequestFacts) -> dict[str, Any]:
+    def _jev_state(
+        facts: RequestFacts,
+        routing_task: str,
+        delegation: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         state: dict[str, Any] = {
-            "task": facts.task[:500],
+            "task": routing_task[:500],
             "signals": {
                 "n_items": facts.n_items,
                 "has_image": facts.has_image,
@@ -105,17 +115,25 @@ class RouterEngine:
         }
         if facts.previous_assistant:
             state["previous_assistant"] = facts.previous_assistant[-240:]
+        if delegation is not None:
+            state["delegation"] = delegation
         return state
 
     def _query_candidate(
-        self, facts: RequestFacts
+        self,
+        facts: RequestFacts,
+        routing_task: str,
+        delegation: dict[str, Any] | None = None,
     ) -> tuple[RouteCandidate, bool, int | None, dict[str, Any] | None]:
         key = self.key_loader()
         if not key:
             return RouteCandidate(ASTRA, "medium", "default", "no_key"), False, None, None
         started = self.monotonic()
         try:
-            response = self.jev_factory(key).ask(self._jev_state(facts))
+            response = self.jev_factory(key).ask(
+                self._jev_state(facts, routing_task, delegation),
+                questions=questions_for(is_subagent=delegation is not None),
+            )
             answers = response.get("answers") if isinstance(response, dict) else None
             answers = answers if isinstance(answers, dict) else {}
             tier_answer = answers.get("tier") if isinstance(answers.get("tier"), dict) else {}
@@ -168,7 +186,41 @@ class RouterEngine:
             identity,
             context_tokens,
             reason=gate,
+            agent_name=identity.agent_name,
+            subagent_kind=identity.subagent_kind,
         )
+
+    def _routing_context(
+        self,
+        identity: ThreadIdentity,
+        facts: RequestFacts,
+        payload: Mapping[str, Any],
+    ) -> tuple[str, str | None, str | None, dict[str, Any] | None]:
+        if not identity.is_subagent:
+            return facts.task, None, None, None
+        parent = self.store.get(identity.parent_thread_id) if identity.parent_thread_id else None
+        parent_tier = parent.model if parent is not None else None
+        new_task = extract_new_task_delegation(payload)
+        agent_name = identity.agent_name or (new_task.agent_name if new_task is not None else None)
+        if new_task is not None and new_task.task:
+            routing_task = new_task.task
+            source = new_task.source
+        else:
+            parent_task = parent.routing_task if parent is not None and parent.routing_task else facts.task
+            routing_task = (
+                f"Delegated subtask agent: {agent_name or 'unknown'}. "
+                "The exact delegation payload is encrypted and unavailable. "
+                f"Parent task context: {parent_task}"
+            )
+            source = "agent_name_fallback"
+        delegation = {
+            "is_subagent": True,
+            "parent_tier": parent_tier,
+            "agent_name": agent_name,
+            "subagent_kind": identity.subagent_kind,
+            "source": source,
+        }
+        return routing_task, source, parent_tier, delegation
 
     def decide(
         self,
@@ -189,6 +241,11 @@ class RouterEngine:
             else estimate_context_tokens(body_chars, self.config.chars_per_token)
         )
         facts = inspect_request(payload)
+        routing_task, delegation_source, parent_tier, delegation = self._routing_context(
+            identity,
+            facts,
+            payload,
+        )
         event = choose_event(identity, self._snapshot(stored), facts)
 
         if self.exists(self.config.off_path):
@@ -205,6 +262,11 @@ class RouterEngine:
                 identity,
                 context_tokens,
                 reason="sticky",
+                parent_tier=stored.parent_tier,
+                agent_name=stored.agent_name,
+                subagent_kind=stored.subagent_kind,
+                delegation_source=stored.delegation_source,
+                routing_task=stored.routing_task,
             )
             return self._shadow(decision, stored)
 
@@ -218,7 +280,11 @@ class RouterEngine:
             gate = "apply"
             reason = "compaction"
         else:
-            policy_route, consulted, jev_ms, jev = self._query_candidate(facts)
+            policy_route, consulted, jev_ms, jev = self._query_candidate(
+                facts,
+                routing_task,
+                delegation,
+            )
             pending_free_reroute = False
             cost = None
             reason = policy_route.gate
@@ -253,6 +319,12 @@ class RouterEngine:
             pending_free_reroute=pending_free_reroute,
             parent_thread_id=identity.parent_thread_id,
             decided_at=self._timestamp(),
+            parent_tier=parent_tier,
+            agent_name=identity.agent_name,
+            subagent_kind=identity.subagent_kind,
+            delegation_task=routing_task if identity.is_subagent else None,
+            delegation_source=delegation_source,
+            routing_task=routing_task,
         )
         self.store.put(identity.thread_id, state)
         decision = Decision(
@@ -268,6 +340,11 @@ class RouterEngine:
             cost=cost,
             jev_ms=jev_ms,
             jev=jev,
+            parent_tier=parent_tier,
+            agent_name=identity.agent_name,
+            subagent_kind=identity.subagent_kind,
+            delegation_source=delegation_source,
+            routing_task=routing_task,
         )
         return self._shadow(decision, state)
 
@@ -296,6 +373,11 @@ class RouterEngine:
             jev_ms=decision.jev_ms,
             shadow=True,
             jev=decision.jev,
+            parent_tier=decision.parent_tier,
+            agent_name=decision.agent_name,
+            subagent_kind=decision.subagent_kind,
+            delegation_source=decision.delegation_source,
+            routing_task=decision.routing_task,
         )
 
     def record_usage(self, thread_id: str | None, context_tokens: int | None) -> None:
