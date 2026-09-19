@@ -325,12 +325,13 @@ def _load_tasks(path: Path = TASKS_PATH) -> list[dict[str, Any]]:
     return value
 
 
-def _copy_workspace(destination: Path) -> None:
+def copy_workspace(source: Path, destination: Path) -> None:
     shutil.copytree(
-        ROOT,
+        source,
         destination,
         ignore=shutil.ignore_patterns(
             ".git",
+            ".codex",
             "runtime",
             "__pycache__",
             "*.pyc",
@@ -338,6 +339,10 @@ def _copy_workspace(destination: Path) -> None:
             "config.toml.backup-*",
         ),
     )
+
+
+def _copy_workspace(destination: Path) -> None:
+    copy_workspace(ROOT, destination)
 
 
 def _write_router_config(path: Path, run_dir: Path, port: int) -> None:

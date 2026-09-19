@@ -9,6 +9,7 @@ from bench.run import (
     apply_preparation,
     balanced_schedule,
     calculate_usage_cost,
+    copy_workspace,
     evaluate_checks,
     is_infrastructure_failure,
     read_jsonl_since,
@@ -54,6 +55,21 @@ class UsageTests(unittest.TestCase):
 
 
 class FixtureAndCheckTests(unittest.TestCase):
+    def test_workspace_copy_excludes_local_codex_hooks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            destination = root / "destination"
+            (source / ".codex").mkdir(parents=True)
+            (source / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
+            (source / "pkg").mkdir()
+            (source / "pkg" / "safe.py").write_text("pass\n", encoding="utf-8")
+
+            copy_workspace(source, destination)
+
+            self.assertTrue((destination / "pkg" / "safe.py").exists())
+            self.assertFalse((destination / ".codex").exists())
+
     def test_preparation_replaces_exact_expected_count(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
