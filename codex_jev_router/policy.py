@@ -244,8 +244,6 @@ def switch_gate(
     budget_usd: float,
     downgrade_max_context_tokens: int,
 ) -> SwitchGate:
-    if current_model == target_model:
-        return SwitchGate(True, "same_model", 0.0, 0.0)
     if TIER_RANK[target_model] < TIER_RANK[current_model] and context_tokens > downgrade_max_context_tokens:
         return SwitchGate(False, "downgrade_context_limit", 0.0, 0.0)
     stay_cost = context_tokens * prices[current_model].cache_read / 1_000_000

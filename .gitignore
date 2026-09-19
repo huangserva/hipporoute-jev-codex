@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Runtime state and logs may contain thread identifiers or prompt-derived metadata.
+runtime/
+*.jsonl
+threads.json
+decisions.jsonl
+
+# Local experiment configuration and backups.
+config.local.toml
+config.e2e.toml
+config.toml.backup-*
+codex-*.log
