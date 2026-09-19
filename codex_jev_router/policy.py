@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Mapping
@@ -42,6 +43,13 @@ class RequestFacts:
     n_items: int
     has_image: bool
     has_tool_history: bool
+
+
+@dataclass(frozen=True)
+class SpawnDelegation:
+    agent_name: str | None
+    task: str | None
+    source: str
 
 
 @dataclass(frozen=True)
@@ -152,6 +160,63 @@ def _item_text(item: Mapping[str, Any]) -> str:
     if isinstance(item.get("output"), str):
         return item["output"]
     return _content_text(item.get("content"))
+
+
+def _encrypted_message(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith("gAAAAA")
+
+
+def extract_spawn_delegations(payload: Mapping[str, Any]) -> list[SpawnDelegation]:
+    raw_input = payload.get("input")
+    items = raw_input if isinstance(raw_input, list) else []
+    delegations = []
+    for item in items:
+        if not isinstance(item, dict) or item.get("type") != "function_call":
+            continue
+        if item.get("name") != "spawn_agent":
+            continue
+        arguments = _json_object(item.get("arguments"))
+        agent_name = arguments.get("task_name")
+        agent_name = agent_name if isinstance(agent_name, str) and agent_name else None
+        message = arguments.get("message")
+        if _encrypted_message(message):
+            task = None
+            source = "spawn_message_encrypted"
+        elif isinstance(message, str) and message.strip():
+            task = message.strip()
+            source = "spawn_message"
+        else:
+            task = None
+            source = "spawn_message_missing"
+        delegations.append(SpawnDelegation(agent_name, task, source))
+    return delegations
+
+
+def extract_new_task_delegation(payload: Mapping[str, Any]) -> SpawnDelegation | None:
+    raw_input = payload.get("input")
+    items = raw_input if isinstance(raw_input, list) else []
+    for item in reversed(items):
+        if not isinstance(item, dict) or item.get("type") != "agent_message":
+            continue
+        text = _item_text(item)
+        if not text.lstrip().startswith("Message Type: NEW_TASK"):
+            continue
+        match = re.search(r"(?m)^Task name:\s*(\S.*?)\s*$", text)
+        agent_name = match.group(1).strip() if match else None
+        payload_match = re.search(r"(?ms)^Payload:\s*\n?(.*)\Z", text)
+        task = payload_match.group(1).strip() if payload_match else ""
+        content = item.get("content")
+        encrypted = isinstance(content, list) and any(
+            isinstance(part, dict) and part.get("type") == "encrypted_content" for part in content
+        )
+        if task:
+            return SpawnDelegation(agent_name, task, "new_task_payload")
+        return SpawnDelegation(
+            agent_name,
+            None,
+            "new_task_encrypted" if encrypted else "new_task_missing",
+        )
+    return None
 
 
 def inspect_request(payload: Mapping[str, Any]) -> RequestFacts:

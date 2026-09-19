@@ -10,6 +10,8 @@ from codex_jev_router.policy import (
     candidate_from_jev,
     choose_event,
     estimate_context_tokens,
+    extract_new_task_delegation,
+    extract_spawn_delegations,
     inspect_request,
     resolve_identity,
     switch_gate,
@@ -89,6 +91,99 @@ class IdentityTests(unittest.TestCase):
 
 
 class RequestClassificationTests(unittest.TestCase):
+    def test_extracts_plaintext_new_task_payload(self):
+        body = payload(
+            thread_id=CHILD,
+            input_items=[
+                {
+                    "type": "agent_message",
+                    "author": "/root",
+                    "recipient": "/root/docstring_policy",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Message Type: NEW_TASK\n"
+                                "Task name: /root/docstring_policy\n"
+                                "Sender: /root\n"
+                                "Payload:\nAdd a docstring to inspect_request."
+                            ),
+                        }
+                    ],
+                }
+            ],
+        )
+
+        delegation = extract_new_task_delegation(body)
+
+        self.assertEqual(delegation.agent_name, "/root/docstring_policy")
+        self.assertEqual(delegation.task, "Add a docstring to inspect_request.")
+        self.assertEqual(delegation.source, "new_task_payload")
+
+    def test_extracts_plaintext_spawn_message(self):
+        body = payload(
+            input_items=[
+                {
+                    "type": "function_call",
+                    "namespace": "collaboration",
+                    "name": "spawn_agent",
+                    "arguments": json.dumps(
+                        {
+                            "task_name": "docstring_policy",
+                            "fork_turns": "all",
+                            "message": "Add a docstring to inspect_request.",
+                        }
+                    ),
+                }
+            ]
+        )
+
+        delegations = extract_spawn_delegations(body)
+
+        self.assertEqual(len(delegations), 1)
+        self.assertEqual(delegations[0].agent_name, "docstring_policy")
+        self.assertEqual(delegations[0].task, "Add a docstring to inspect_request.")
+        self.assertEqual(delegations[0].source, "spawn_message")
+
+    def test_rejects_encrypted_spawn_and_new_task_payload(self):
+        encrypted = "gAAAAABqrxBBLGpHo6ztlszHswqbch"
+        body = payload(
+            thread_id=CHILD,
+            input_items=[
+                {
+                    "type": "function_call",
+                    "namespace": "collaboration",
+                    "name": "spawn_agent",
+                    "arguments": json.dumps(
+                        {"task_name": "delegation_probe", "fork_turns": "all", "message": encrypted}
+                    ),
+                },
+                {
+                    "type": "agent_message",
+                    "author": "/root",
+                    "recipient": "/root/delegation_probe",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Message Type: NEW_TASK\nTask name: /root/delegation_probe\n"
+                                "Sender: /root\nPayload:\n"
+                            ),
+                        },
+                        {"type": "encrypted_content", "encrypted_content": encrypted},
+                    ],
+                },
+            ],
+        )
+
+        spawn = extract_spawn_delegations(body)[0]
+        new_task = extract_new_task_delegation(body)
+
+        self.assertIsNone(spawn.task)
+        self.assertEqual(spawn.source, "spawn_message_encrypted")
+        self.assertIsNone(new_task.task)
+        self.assertEqual(new_task.source, "new_task_encrypted")
+
     def test_tool_output_is_a_tool_step(self):
         facts = inspect_request(
             payload(
