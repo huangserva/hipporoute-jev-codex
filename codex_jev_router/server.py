@@ -120,6 +120,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                 200,
                 {
                     "object": "list",
+                    "models": [],
                     "data": [
                         {
                             "id": "auto",

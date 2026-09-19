@@ -123,6 +123,13 @@ class ServerTests(unittest.TestCase):
         conn.close()
         self.assertTrue(health_data["ok"])
         self.assertEqual(models_data["data"][0]["id"], "auto")
+        self.assertEqual(models_data["models"], [])
+
+    def test_direct_upstream_receives_one_content_type_header(self):
+        self.post(True)
+        raw_headers = FakeUpstreamHandler.seen[-1][1]
+        content_types = [value for name, value in raw_headers if name.lower() == "content-type"]
+        self.assertEqual(content_types, ["application/json"])
 
     def test_streaming_response_is_redeclared_and_relayed_byte_exact(self):
         status, headers, data = self.post(True)

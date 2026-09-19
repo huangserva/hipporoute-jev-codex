@@ -113,7 +113,13 @@ class UpstreamClient:
         if self.mode == "direct":
             for name, value in incoming_headers:
                 lower = name.lower()
-                if lower in HOP_BY_HOP or lower in {"host", "content-length", "expect", "accept"}:
+                if lower in HOP_BY_HOP or lower in {
+                    "host",
+                    "content-length",
+                    "content-type",
+                    "expect",
+                    "accept",
+                }:
                     continue
                 connection.putheader(name, value)
         connection.putheader("Content-Type", "application/json")
