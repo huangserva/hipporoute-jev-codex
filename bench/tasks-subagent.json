@@ -13,9 +13,9 @@
   {
     "id": "s2_parallel_tests",
     "expected_children": 3,
-    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个只读子 agent，task_name 分别为 test_policy、test_server、test_engine，让它们分别运行 python3 -m unittest -q tests.test_policy、tests.test_server、tests.test_engine；等待结果后由父线程把严格 JSON 对象 {\"test_policy\":\"PASS\",\"test_server\":\"PASS\",\"test_engine\":\"PASS\"} 写到 fanout-test-results.json，任何失败则对应值写 FAIL。",
+    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个只读子 agent，task_name 分别为 test_policy、test_jev、test_config，让它们分别运行 python3 -m unittest -q tests.test_policy、tests.test_jev、tests.test_config；等待结果后由父线程把严格 JSON 对象 {\"test_policy\":\"PASS\",\"test_jev\":\"PASS\",\"test_config\":\"PASS\"} 写到 fanout-test-results.json，任何失败则对应值写 FAIL。",
     "checks": [
-      {"type": "command", "argv": ["python3", "-c", "import json; d=json.load(open('fanout-test-results.json')); assert d == {'test_policy':'PASS','test_server':'PASS','test_engine':'PASS'}"]}
+      {"type": "command", "argv": ["python3", "-c", "import json; d=json.load(open('fanout-test-results.json')); assert d == {'test_policy':'PASS','test_jev':'PASS','test_config':'PASS'}"]}
     ]
   },
   {

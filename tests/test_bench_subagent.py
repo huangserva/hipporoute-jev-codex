@@ -14,6 +14,15 @@ from bench.run_subagent import (
 
 
 class SubagentScheduleTests(unittest.TestCase):
+    def test_read_only_fanout_uses_sandbox_safe_test_modules(self):
+        root = Path(__file__).resolve().parents[1]
+        tasks = json.loads((root / "bench" / "tasks-subagent.json").read_text(encoding="utf-8"))
+        task = next(item for item in tasks if item["id"] == "s2_parallel_tests")
+
+        self.assertNotIn("test_server", task["prompt"])
+        self.assertIn("test_jev", task["prompt"])
+        self.assertIn("test_config", task["prompt"])
+
     def test_script_entrypoint_can_import_bench_package(self):
         root = Path(__file__).resolve().parents[1]
         completed = subprocess.run(
@@ -143,3 +152,4 @@ class SubagentAggregateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+import json
