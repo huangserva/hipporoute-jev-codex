@@ -15,6 +15,10 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
+
 from bench.run import (
     BACKTEST_PRICES,
     DEFAULT_CODEX_CONFIG,

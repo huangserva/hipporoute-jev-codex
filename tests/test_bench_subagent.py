@@ -1,10 +1,26 @@
+import subprocess
+import sys
 import unittest
+from pathlib import Path
 
 from bench.run import BACKTEST_PRICES, balanced_schedule
 from bench.run_subagent import aggregate_subagent_results, thread_metrics
 
 
 class SubagentScheduleTests(unittest.TestCase):
+    def test_script_entrypoint_can_import_bench_package(self):
+        root = Path(__file__).resolve().parents[1]
+        completed = subprocess.run(
+            [sys.executable, "bench/run_subagent.py", "--help"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stdout)
+
     def test_four_tasks_two_modes_three_repeats_make_24_sessions(self):
         tasks = [{"id": f"s{index}"} for index in range(1, 5)]
 
