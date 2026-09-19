@@ -43,6 +43,7 @@ class Decision:
     would: dict[str, Any] | None = None
     jev_ms: int | None = None
     shadow: bool = False
+    jev: dict[str, Any] | None = None
 
 
 class RouterEngine:
@@ -106,10 +107,12 @@ class RouterEngine:
             state["previous_assistant"] = facts.previous_assistant[-240:]
         return state
 
-    def _query_candidate(self, facts: RequestFacts) -> tuple[RouteCandidate, bool, int | None]:
+    def _query_candidate(
+        self, facts: RequestFacts
+    ) -> tuple[RouteCandidate, bool, int | None, dict[str, Any] | None]:
         key = self.key_loader()
         if not key:
-            return RouteCandidate(ASTRA, "medium", "default", "no_key"), False, None
+            return RouteCandidate(ASTRA, "medium", "default", "no_key"), False, None, None
         started = self.monotonic()
         try:
             response = self.jev_factory(key).ask(self._jev_state(facts))
@@ -123,7 +126,17 @@ class RouterEngine:
                 tier_answer.get("confidence"),
                 self.config.confidence_gate,
             )
-            return candidate, True, int(round((self.monotonic() - started) * 1000))
+            observation = {
+                "tier": {
+                    "choice": tier_answer.get("choice"),
+                    "confidence": tier_answer.get("confidence"),
+                },
+                "depth": {
+                    "choice": depth_answer.get("choice"),
+                    "confidence": depth_answer.get("confidence"),
+                },
+            }
+            return candidate, True, int(round((self.monotonic() - started) * 1000)), observation
         except Exception as exc:
             return (
                 RouteCandidate(
@@ -134,6 +147,7 @@ class RouterEngine:
                 ),
                 True,
                 int(round((self.monotonic() - started) * 1000)),
+                None,
             )
 
     def _direct_decision(
@@ -199,11 +213,12 @@ class RouterEngine:
             pending_free_reroute = True
             consulted = False
             jev_ms = None
+            jev = None
             cost = None
             gate = "apply"
             reason = "compaction"
         else:
-            policy_route, consulted, jev_ms = self._query_candidate(facts)
+            policy_route, consulted, jev_ms, jev = self._query_candidate(facts)
             pending_free_reroute = False
             cost = None
             reason = policy_route.gate
@@ -252,6 +267,7 @@ class RouterEngine:
             reason=reason,
             cost=cost,
             jev_ms=jev_ms,
+            jev=jev,
         )
         return self._shadow(decision, state)
 
@@ -279,6 +295,7 @@ class RouterEngine:
             would=would,
             jev_ms=decision.jev_ms,
             shadow=True,
+            jev=decision.jev,
         )
 
     def record_usage(self, thread_id: str | None, context_tokens: int | None) -> None:

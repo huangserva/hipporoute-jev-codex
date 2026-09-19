@@ -239,6 +239,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "reason": decision.reason,
                     "consulted_jev": decision.consulted_jev,
                     "jev_ms": decision.jev_ms,
+                    "jev": decision.jev,
                     "shadow": decision.shadow,
                     "model": decision.model,
                     "effort": decision.effort,

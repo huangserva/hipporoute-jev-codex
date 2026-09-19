@@ -110,6 +110,13 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(decision.gate, "apply")
         self.assertEqual(decision.reason, "jev")
         self.assertEqual(decision.jev_ms, 1250)
+        self.assertEqual(
+            decision.jev,
+            {
+                "tier": {"choice": LUNA, "confidence": 0.9},
+                "depth": {"choice": "low", "confidence": None},
+            },
+        )
 
     def test_no_key_fails_open_and_pins_astra_medium(self):
         engine = self.engine(fake=None, key="")
