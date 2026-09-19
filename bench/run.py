@@ -249,6 +249,17 @@ def aggregate_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "sessions": len(selected),
             "pass_rate": sum(bool(row.get("passed")) for row in selected) / len(selected) if selected else None,
             "cost": _stats([float(row["cost_usd"]) for row in selected]),
+            "cost_total_usd": sum(float(row["cost_usd"]) for row in selected),
+            "usage": {
+                name: sum(int(row.get(name) or 0) for row in selected)
+                for name in ("input_tokens", "cached_tokens", "output_tokens")
+            },
+            "requests": sum(int(row.get("request_count") or 0) for row in selected),
+            "completed_requests": sum(int(row.get("completed_request_count") or 0) for row in selected),
+            "missing_completed": sum(int(row.get("missing_completed") or 0) for row in selected),
+            "lower_bound_sessions": sum(bool(row.get("cost_is_lower_bound")) for row in selected),
+            "wall_ms": _stats([float(row["wall_ms"]) for row in selected]),
+            "jev_ms": _stats([float(row["jev_ms"]) for row in selected if row.get("jev_ms") is not None]),
         }
     tasks = {}
     for task_id in sorted({row["task_id"] for row in valid}):
@@ -288,7 +299,23 @@ def aggregate_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
             if row.get("jev_tier_choice") and row.get("jev_tier_choice") != row.get("expected_model")
         }
     )
-    return {"modes": modes, "tasks": tasks, "groups": groups, "jev_mismatches": mismatches}
+    policy_mismatches = sorted(
+        {
+            row["task_id"]
+            for row in valid
+            if row.get("policy_model") and row.get("policy_model") != row.get("expected_model")
+        }
+    )
+    shadow_total = modes["shadow"]["cost_total_usd"]
+    live_total = modes["live"]["cost_total_usd"]
+    return {
+        "modes": modes,
+        "tasks": tasks,
+        "groups": groups,
+        "overall_savings_percent": (1 - live_total / shadow_total) * 100 if shadow_total else None,
+        "jev_mismatches": mismatches,
+        "policy_mismatches": policy_mismatches,
+    }
 
 
 def _load_tasks(path: Path = TASKS_PATH) -> list[dict[str, Any]]:

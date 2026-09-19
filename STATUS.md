@@ -11,8 +11,9 @@
 - 实现切换成本预算与 20000 token 降级硬阈值；价格、预算和阈值可配置。
 - 实现线程状态内存存储与原子 JSON 落盘、kill switch、shadow 文件哨兵、0600 JSONL 决策日志。
 - 实现 Codex Router caller edge 与 ChatGPT Codex 直连两种上游；HTTPS 直连遵守环境代理。
-- 完成 50 项离线单元测试。
+- 完成 58 项离线单元测试。
 - 用真实 Jev key 完成 shadow 与真路由对照；`response.completed.model` 证明 luna/astra 实际切换，详见 `docs/2026-09-19-真实Jev端到端.md`。
+- 增加可重复的 8 任务机械/推理基准驱动；48 个正式新会话全部通过，机械组费用降低 95.36%，全任务费用降低 44.75%，详见 `docs/2026-09-19-机械任务基准.md`。
 - 完成 Codex CLI 0.155.1 真实端到端：两个用户轮次、至少两次工具续跑和一个原生子 agent；无 Jev key 时决策点均正确记为 `no_key` 并走 `astra@medium`。
 - 端到端实验后已恢复 `~/.codex/config.toml`，恢复文件与实验前备份的 SHA-256 一致。
 
@@ -21,7 +22,7 @@
 - 未实现 Codex-dry 备用梯队。
 - 未实现旧路由器的调试抓包、用量汇总、launchd/watchdog 安装器和 UI reasoning summary 标记。
 - `SummaryMarker` 仅保留了关闭的配置位，尚未向 SSE 插入可见路由标记。
-- 未在真实 Jev key 下验证分类质量；单测使用假 Jev，真实验证覆盖的是 `no_key` fail-open 路径。
+- 真实 Jev 分类基准目前只覆盖 8 个任务、每格 3 次；还没有覆盖多仓库、多语言、长任务或人工质量评分。
 - 未在本机安装 Codex Router，因此 caller edge 仅有协议/路径单测，真实端到端使用直连模式。
 
 ## 已知问题

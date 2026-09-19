@@ -130,6 +130,17 @@ class FailureAndAggregateTests(unittest.TestCase):
                             "mode": mode,
                             "repeat": repeat,
                             "cost_usd": cost,
+                            "input_tokens": 100,
+                            "cached_tokens": 40,
+                            "output_tokens": 10,
+                            "request_count": 2,
+                            "completed_request_count": 2,
+                            "missing_completed": 0,
+                            "wall_ms": 1000 * repeat,
+                            "jev_ms": 100 * repeat,
+                            "jev_tier_choice": "gpt-6-astra" if task_id == "r1" else "gpt-5.6-luna",
+                            "policy_model": "gpt-5.6-sol" if task_id == "r1" else "gpt-5.6-luna",
+                            "expected_model": "gpt-6-astra" if task_id == "r1" else "gpt-5.6-luna",
                             "passed": repeat != 3,
                             "infrastructure_failure": False,
                         }
@@ -138,6 +149,13 @@ class FailureAndAggregateTests(unittest.TestCase):
         self.assertEqual(summary["groups"]["mechanical"]["savings_percent"], 50.0)
         self.assertEqual(summary["groups"]["reasoning"]["savings_percent"], 50.0)
         self.assertAlmostEqual(summary["modes"]["live"]["pass_rate"], 2 / 3)
+        self.assertEqual(summary["modes"]["live"]["usage"]["input_tokens"], 600)
+        self.assertEqual(summary["modes"]["live"]["requests"], 12)
+        self.assertEqual(summary["modes"]["live"]["missing_completed"], 0)
+        self.assertEqual(summary["modes"]["live"]["wall_ms"]["median"], 2000)
+        self.assertEqual(summary["modes"]["live"]["jev_ms"]["median"], 200)
+        self.assertEqual(summary["jev_mismatches"], [])
+        self.assertEqual(summary["policy_mismatches"], ["r1"])
 
 
 if __name__ == "__main__":

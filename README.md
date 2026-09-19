@@ -171,7 +171,18 @@ rm ~/.codex/codex-jev-router/router.shadow
 
 ```bash
 python3 -m unittest -v
-python3 -m compileall -q codex_jev_router tests
+python3 -m compileall -q codex_jev_router bench tests
 ```
 
 测试使用本地假 Jev 与假上游，不访问网络，覆盖四个决策时机、工具续跑、成本关卡、身份样例、Jev 重试和 fail-open、SSE 透传/组装、代理 CONNECT、状态和 HTTP 端点。
+
+## 机械任务基准
+
+`bench/run.py` 会启动直连路由器、临时改写并按 SHA-256 核对恢复 `~/.codex/config.toml`，为每个样本复制一份隔离工作区，并在结束时停止服务、删除哨兵和工作副本。需要真实 Jev key；原始结果写入被 Git 忽略的 `runtime/bench/`。
+
+```bash
+python3 bench/run.py --dry-run --run-id dry-YYYYMMDD
+python3 bench/run.py --repeats 3 --run-id full-YYYYMMDD
+```
+
+正式基准使用 8 个任务、shadow/live 各 3 遍，共 48 个独立新会话；基础设施失败最多重试 2 次，任务本身未通过不会重试。2026-09-20 的实测结果是 48/48 通过，机械组节省 95.36%，全任务节省 44.75%，详见 `docs/2026-09-19-机械任务基准.md`。
