@@ -1,10 +1,16 @@
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 from bench.run import BACKTEST_PRICES, balanced_schedule
-from bench.run_subagent import aggregate_subagent_results, thread_metrics
+from bench.run_subagent import (
+    aggregate_subagent_results,
+    codex_thread_id,
+    filter_thread_tree,
+    thread_metrics,
+)
 
 
 class SubagentScheduleTests(unittest.TestCase):
@@ -32,6 +38,34 @@ class SubagentScheduleTests(unittest.TestCase):
 
 
 class ThreadMetricTests(unittest.TestCase):
+    def test_reads_root_thread_id_from_codex_jsonl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "codex.jsonl"
+            path.write_text(
+                '{"type":"turn.started"}\n'
+                '{"type":"thread.started","thread_id":"root-thread"}\n',
+                encoding="utf-8",
+            )
+
+            self.assertEqual(codex_thread_id(path), "root-thread")
+
+    def test_filters_unrelated_concurrent_sessions_but_keeps_nested_descendants(self):
+        rows = [
+            {"thread_id": "other", "parent_thread_id": None},
+            {"thread_id": "root", "parent_thread_id": None},
+            {"thread_id": "child", "parent_thread_id": "root"},
+            {"thread_id": "grandchild", "parent_thread_id": "child"},
+            {"thread_id": "other-child", "parent_thread_id": "other"},
+            {"thread_id": "root", "parent_thread_id": None},
+        ]
+
+        filtered = filter_thread_tree(rows, "root")
+
+        self.assertEqual(
+            [row["thread_id"] for row in filtered],
+            ["root", "child", "grandchild", "root"],
+        )
+
     def test_groups_parent_and_children_with_independent_costs(self):
         rows = [
             {

@@ -49,6 +49,33 @@ def _stats(values: list[float]) -> dict[str, Any]:
     }
 
 
+def codex_thread_id(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get("type") == "thread.started" and isinstance(event.get("thread_id"), str):
+            return event["thread_id"]
+    return None
+
+
+def filter_thread_tree(rows: list[dict[str, Any]], root_thread_id: str) -> list[dict[str, Any]]:
+    included = {root_thread_id}
+    changed = True
+    while changed:
+        changed = False
+        for row in rows:
+            thread_id = row.get("thread_id")
+            if row.get("parent_thread_id") in included and isinstance(thread_id, str):
+                if thread_id not in included:
+                    included.add(thread_id)
+                    changed = True
+    return [row for row in rows if row.get("thread_id") in included]
+
+
 def thread_metrics(
     rows: list[dict[str, Any]],
     mode: str,
@@ -233,7 +260,9 @@ def _run_attempt(
                 exit_code = 124
         wall_ms = int(round((time.monotonic() - started) * 1000))
         time.sleep(0.1)
-        rows = read_jsonl_since(decision_log, offset)
+        window_rows = read_jsonl_since(decision_log, offset)
+        root_thread_id = codex_thread_id(output_path)
+        rows = filter_thread_tree(window_rows, root_thread_id) if root_thread_id else []
         final_output = _final_agent_output(output_path)
         checks_passed, check_details = evaluate_checks(workspace, task["checks"], final_output)
         infra = _infrastructure_failure(exit_code, rows)
@@ -247,6 +276,7 @@ def _run_attempt(
             "sequence": sequence,
             "attempt": attempt,
             "expected_children": task["expected_children"],
+            "root_thread_id": root_thread_id,
             "observed_children": len(children),
             "child_count_ok": child_count_ok,
             "threads": threads,
