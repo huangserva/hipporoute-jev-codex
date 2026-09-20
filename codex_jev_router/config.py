@@ -80,7 +80,7 @@ DEFAULTS: dict[str, Any] = {
         "downgrade_max_context_tokens": 20_000,
         "switch_budget_usd": 0.25,
         "chars_per_token": 2.8,
-        "luna_effort": "max",
+        "luna_effort": "low",
         "state_ttl_seconds": 86_400,
         "state_gc_interval_seconds": 300,
         "summary_marker": False,

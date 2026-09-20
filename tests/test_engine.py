@@ -192,6 +192,36 @@ class EngineTests(unittest.TestCase):
         self.assertEqual((decision.model, decision.effort), (LUNA, "low"))
         self.assertEqual(decision.service_tier, "priority")
 
+    def test_parent_fanout_task_sends_coordination_hint_to_jev(self):
+        fake = FakeJev(
+            answers=[
+                {
+                    "answers": {
+                        "tier": {"choice": LUNA, "confidence": 0.9},
+                        "depth": {"choice": "low"},
+                    }
+                }
+            ]
+        )
+        engine = self.engine(fake=fake)
+        headers, body = request(
+            items=[
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": (
+                        "使用原生 collaboration spawn_agent 并行启动恰好三个只读子 agent，"
+                        "等待结果后由父线程汇总。"
+                    ),
+                }
+            ]
+        )
+
+        engine.decide(headers, body, len(json.dumps(body)))
+
+        self.assertEqual(fake.states[0]["coordination_hint"], "fanout_coordinator")
+        self.assertEqual(fake.states[0]["signals"]["coordination_hint"], "fanout_coordinator")
+
     def test_no_key_fails_open_and_pins_astra_medium(self):
         engine = self.engine(fake=None, key="")
         headers, body = request()
@@ -456,7 +486,7 @@ class EngineTests(unittest.TestCase):
         self.assertEqual((compact.model, compact.effort, compact.gate), (SOL, "high", "apply"))
         self.assertEqual(compact.reason, "compaction")
         self.assertEqual(rerouted.event, "free_reroute")
-        self.assertEqual((rerouted.model, rerouted.effort), (LUNA, "max"))
+        self.assertEqual((rerouted.model, rerouted.effort), (LUNA, "low"))
         self.assertEqual(len(fake.states), 1)
         self.assertFalse(self.store.get("thread-redacted").pending_free_reroute)
 

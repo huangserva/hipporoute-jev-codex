@@ -18,6 +18,15 @@ EFFORTS = ("low", "medium", "high", "xhigh", "max")
 COMPACTION_PREFIX = "You are performing a CONTEXT CHECKPOINT COMPACTION"
 TOOL_OUTPUT_TYPES = ("function_call_output", "custom_tool_call_output")
 TIER_RANK = {LUNA: 0, SOL: 1, ASTRA: 2}
+COORDINATION_AGENT_RE = re.compile(
+    r"(?:sub[- ]?agents?|子\s*agent|spawn_agent|collaboration)", re.IGNORECASE
+)
+COORDINATION_FANOUT_RE = re.compile(
+    r"(?:parallel|fan[- ]?out|delegate|dispatch|spawn|并行|委托|派发|启动)", re.IGNORECASE
+)
+COORDINATION_AGGREGATE_RE = re.compile(
+    r"(?:aggregate|summari[sz]e|wait.{0,24}results?|汇总|等待.{0,24}结果)", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -289,6 +298,20 @@ def inspect_request(
     )
 
 
+def coordination_hint(task: str) -> str | None:
+    """Recognize explicit pure fan-out coordination without guessing from generic work."""
+
+    if not isinstance(task, str):
+        return None
+    if not COORDINATION_AGENT_RE.search(task):
+        return None
+    if not COORDINATION_FANOUT_RE.search(task):
+        return None
+    if not COORDINATION_AGGREGATE_RE.search(task):
+        return None
+    return "fanout_coordinator"
+
+
 def choose_event(
     identity: ThreadIdentity, state: ThreadSnapshot | None, facts: RequestFacts
 ) -> str:
@@ -312,7 +335,7 @@ def candidate_from_jev(
     depth: Any,
     confidence: Any,
     confidence_gate: float = 0.5,
-    luna_effort: str = "max",
+    luna_effort: str = "low",
 ) -> RouteCandidate:
     if tier not in TIERS or not isinstance(confidence, (int, float)):
         raise ValueError("invalid Jev tier answer")

@@ -22,6 +22,8 @@ QUESTIONS = {
         "instructions": (
             "Which model tier should serve this model call? Route the current user task or newly "
             "spawned subagent task. Use gpt-5.6-luna for mechanical, clearly scoped work; "
+            "a coordinator that only needs to delegate subtasks and aggregate their results also "
+            "belongs on gpt-5.6-luna even when the delegated work spans multiple modules; "
             "gpt-5.6-sol for standard implementation work; and gpt-6-astra for hard, ambiguous, "
             "architectural, or risky work. Tool continuations are pinned by the caller and are not "
             "sent for a new decision."

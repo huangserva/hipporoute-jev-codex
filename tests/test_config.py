@@ -18,7 +18,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.jev_retry_after_cap_seconds, 4.0)
         self.assertEqual(config.jev_circuit_failure_threshold, 3)
         self.assertEqual(config.jev_circuit_open_seconds, 60.0)
-        self.assertEqual(config.luna_effort, "max")
+        self.assertEqual(config.luna_effort, "low")
         self.assertEqual(config.stream_debug_path, Path.home() / ".codex/codex-jev-router/stream.debug")
         self.assertEqual(config.raw_stream_dir, Path.home() / ".codex/codex-jev-router/raw-streams")
         self.assertEqual(config.prices[ASTRA].cache_write, 12.50)

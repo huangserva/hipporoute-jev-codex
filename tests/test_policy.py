@@ -13,6 +13,7 @@ from codex_jev_router.policy import (
     estimate_context_tokens,
     extract_new_task_delegation,
     extract_spawn_delegations,
+    coordination_hint,
     inspect_request,
     resolve_identity,
     switch_gate,
@@ -101,6 +102,17 @@ class IdentityTests(unittest.TestCase):
 
 
 class RequestClassificationTests(unittest.TestCase):
+    def test_explicit_parallel_subagent_task_is_coordination_only(self):
+        hint = coordination_hint(
+            "使用原生 collaboration spawn_agent 并行启动恰好三个只读子 agent，"
+            "等待结果后由父线程汇总。"
+        )
+
+        self.assertEqual(hint, "fanout_coordinator")
+
+    def test_ordinary_implementation_task_has_no_coordination_hint(self):
+        self.assertIsNone(coordination_hint("修复 policy.py 的边界条件并运行测试"))
+
     def test_extracts_plaintext_new_task_payload(self):
         body = payload(
             thread_id=CHILD,
@@ -284,9 +296,9 @@ class CandidateAndCostTests(unittest.TestCase):
         candidate = candidate_from_jev(LUNA, "low", 0.49, confidence_gate=0.5)
         self.assertEqual((candidate.model, candidate.effort, candidate.gate), (SOL, "low", "low_confidence"))
 
-    def test_luna_is_always_max_effort(self):
+    def test_luna_defaults_to_low_effort(self):
         candidate = candidate_from_jev(LUNA, "low", 0.9, confidence_gate=0.5)
-        self.assertEqual((candidate.model, candidate.effort), (LUNA, "max"))
+        self.assertEqual((candidate.model, candidate.effort), (LUNA, "low"))
 
     def test_luna_effort_can_be_overridden_without_changing_service_tier(self):
         candidate = candidate_from_jev(

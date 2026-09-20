@@ -23,6 +23,13 @@ class FakeResponse:
 
 
 class JevTests(unittest.TestCase):
+    def test_tier_question_classifies_pure_fanout_coordination_as_luna(self):
+        instructions = questions_for(is_subagent=False)["tier"]["instructions"]
+
+        self.assertIn("delegate subtasks", instructions)
+        self.assertIn("aggregate their results", instructions)
+        self.assertIn("gpt-5.6-luna", instructions)
+
     def test_subagent_questions_explicitly_judge_delegated_task(self):
         questions = questions_for(is_subagent=True)
 

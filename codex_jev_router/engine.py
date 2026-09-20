@@ -22,6 +22,7 @@ from .policy import (
     ThreadSnapshot,
     candidate_from_jev,
     choose_event,
+    coordination_hint,
     estimate_context_tokens,
     extract_new_task_delegation,
     extract_spawn_delegations,
@@ -218,6 +219,10 @@ class RouterEngine:
             },
             "step": {"type": facts.step_type},
         }
+        hint = None if delegation is not None else coordination_hint(routing_task)
+        if hint is not None:
+            state["coordination_hint"] = hint
+            state["signals"]["coordination_hint"] = hint
         if facts.previous_assistant:
             state["previous_assistant"] = facts.previous_assistant[-240:]
         if delegation is not None:
