@@ -5,6 +5,7 @@ from pathlib import Path
 
 from bench.run import (
     BACKTEST_PRICES,
+    ROOT,
     aggregate_results,
     apply_preparation,
     balanced_schedule,
@@ -56,6 +57,14 @@ class UsageTests(unittest.TestCase):
 
 
 class FixtureAndCheckTests(unittest.TestCase):
+    def test_all_task_preparations_apply_to_current_workspace(self):
+        tasks = json.loads((ROOT / "bench" / "tasks.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "workspace"
+            copy_workspace(ROOT, destination)
+            for task in tasks:
+                apply_preparation(destination, task.get("prepare", []))
+
     def test_workspace_copy_excludes_local_codex_hooks(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

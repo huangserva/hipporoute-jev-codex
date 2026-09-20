@@ -41,8 +41,8 @@
       {
         "type": "replace",
         "path": "README.md",
-        "find": "# Codex + Jev 边界路由器（阶段一）",
-        "replace": "# Codex + Jev 边界路由气（阶段一）",
+        "find": "# Codex + Jev 边界路由器",
+        "replace": "# Codex + Jev 边界路由气",
         "count": 1
       }
     ],
@@ -50,7 +50,7 @@
       {
         "type": "file_contains_all",
         "path": "README.md",
-        "values": ["# Codex + Jev 边界路由器（阶段一）"]
+        "values": ["# Codex + Jev 边界路由器"]
       },
       {"type": "file_not_contains_all", "path": "README.md", "values": ["路由气"]}
     ]
