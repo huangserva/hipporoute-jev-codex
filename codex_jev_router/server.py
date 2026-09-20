@@ -235,6 +235,7 @@ class RouterHandler(BaseHTTPRequestHandler):
             return self._json(400, {"error": {"message": "JSON object expected"}})
 
         started = time.monotonic()
+        request_started_monotonic_ns = time.monotonic_ns()
         request_id = str(uuid.uuid4())
         request_headers = list(self.headers.raw_items())
         decision = self.server.app.engine.decide(dict(request_headers), payload, len(raw.decode("utf-8", "replace")))
@@ -305,6 +306,8 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "task": text_preview(decision.routing_task),
                     "routing_task": text_preview(decision.routing_task),
                     "total_ms": int((time.monotonic() - started) * 1000),
+                    "request_started_monotonic_ns": request_started_monotonic_ns,
+                    "response_finished_monotonic_ns": time.monotonic_ns(),
                     "stream_capture": capture.relative_name,
                 }
             )

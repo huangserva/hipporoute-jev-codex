@@ -125,6 +125,9 @@ class ThreadMetricTests(unittest.TestCase):
         self.assertEqual(child["agent_name"], "/root/fix_typo")
         self.assertEqual(child["policy_model"], "gpt-5.6-luna")
         self.assertEqual(child["jev_tier_confidence"], 0.9)
+        self.assertEqual(child["first_input_tokens"], 200)
+        self.assertEqual(child["first_cached_tokens"], 100)
+        self.assertEqual(child["first_cache_hit_ratio"], 0.5)
         self.assertGreater(parent["cost_usd"], child["cost_usd"])
 
 

@@ -110,6 +110,9 @@ def thread_metrics(
         jev = first.get("jev") if isinstance(first.get("jev"), dict) else {}
         tier = jev.get("tier") if isinstance(jev.get("tier"), dict) else {}
         depth = jev.get("depth") if isinstance(jev.get("depth"), dict) else {}
+        first_usage = first.get("usage") if isinstance(first.get("usage"), dict) else {}
+        first_input = first_usage.get("input_tokens")
+        first_cached = first_usage.get("cached_tokens")
         metrics.append(
             {
                 "thread_id": thread_id,
@@ -127,6 +130,14 @@ def thread_metrics(
                 "jev_depth_confidence": depth.get("confidence"),
                 "jev_ms": first.get("jev_ms"),
                 "gate": first.get("gate"),
+                "first_input_tokens": first_input,
+                "first_cached_tokens": first_cached,
+                "first_output_tokens": first_usage.get("output_tokens"),
+                "first_cache_hit_ratio": (
+                    first_cached / first_input
+                    if isinstance(first_input, int) and first_input > 0 and isinstance(first_cached, int)
+                    else None
+                ),
                 "request_count": len(thread_rows),
                 "completed_request_count": len(thread_rows) - usage["missing_completed"],
                 **usage,

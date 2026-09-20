@@ -174,6 +174,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(record["usage"]["output_tokens"], 37)
         self.assertEqual(record["upstream_model"], "gpt-6-astra")
         self.assertTrue(record["response_completed"])
+        self.assertIsInstance(record["request_started_monotonic_ns"], int)
+        self.assertIsInstance(record["response_finished_monotonic_ns"], int)
+        self.assertLessEqual(record["request_started_monotonic_ns"], record["response_finished_monotonic_ns"])
         self.assertIsNone(record["jev"])
         self.assertNotIn("authorization", json.dumps(record).lower())
 
