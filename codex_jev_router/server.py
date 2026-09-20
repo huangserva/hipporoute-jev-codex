@@ -17,7 +17,7 @@ from typing import Any
 from . import __version__
 from .config import RouterConfig
 from .engine import Decision, RouterEngine
-from .policy import inspect_request
+from .policy import estimate_context_tokens, inspect_request
 from .state import ThreadStateStore
 from .sse import SSEUsageTracker, assemble_sse
 from .stream_debug import RawStreamCapture
@@ -259,7 +259,8 @@ class RouterHandler(BaseHTTPRequestHandler):
         request_started_monotonic_ns = time.monotonic_ns()
         request_id = str(uuid.uuid4())
         request_headers = list(self.headers.raw_items())
-        decision = self.server.app.engine.decide(dict(request_headers), payload, len(raw.decode("utf-8", "replace")))
+        body_chars = len(raw.decode("utf-8", "replace"))
+        decision = self.server.app.engine.decide(dict(request_headers), payload, body_chars)
         stream_requested = payload.get("stream") is True
         payload["model"] = decision.model
         reasoning = payload.get("reasoning")
@@ -294,8 +295,17 @@ class RouterHandler(BaseHTTPRequestHandler):
                 return
             tracker.finish()
             usage = tracker.usage
+            if isinstance(usage.input_tokens, int):
+                context_tokens = usage.input_tokens
+                context_source = "usage"
+            else:
+                context_tokens = estimate_context_tokens(
+                    body_chars,
+                    self.server.app.config.chars_per_token,
+                )
+                context_source = "estimate"
             try:
-                self.server.app.engine.record_usage(decision.identity.thread_id, usage.input_tokens)
+                self.server.app.engine.record_usage(decision.identity.thread_id, context_tokens)
             except OSError as exc:
                 self._capture_event("record_error", stage="state", error=type(exc).__name__)
                 print(
@@ -324,6 +334,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "effort": decision.effort,
                     "service_tier": decision.service_tier,
                     "context_tokens": decision.context_tokens,
+                    "context_source": context_source,
                     "cost": asdict(decision.cost) if decision.cost else None,
                     "would": decision.would,
                     "status": status,

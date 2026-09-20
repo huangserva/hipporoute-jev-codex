@@ -51,6 +51,13 @@ SSE_BYTES = (
     + b"\n\n"
     + b"data: [DONE]\n\n"
 )
+INCOMPLETE_SSE_BYTES = (
+    b"event: response.output_item.done\n"
+    + b"data: "
+    + json.dumps(OUTPUT_ITEM, separators=(",", ":")).encode()
+    + b"\n\n"
+    + b"data: [DONE]\n\n"
+)
 
 
 class FakeUpstreamHandler(BaseHTTPRequestHandler):
@@ -188,6 +195,29 @@ class ServerTests(unittest.TestCase):
 
         return Connection(), Response()
 
+    @staticmethod
+    def response_with_bytes(data):
+        class Connection:
+            def close(self):
+                pass
+
+        class Response:
+            status = 200
+
+            def __init__(self):
+                self.chunks = iter((data, b""))
+
+            def getheader(self, _name):
+                return None
+
+            def getheaders(self):
+                return []
+
+            def read1(self, _size):
+                return next(self.chunks)
+
+        return Connection(), Response()
+
     def test_health_and_models_endpoints(self):
         conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
         conn.request("GET", "/health")
@@ -260,6 +290,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(record["gate"], "no_key")
         self.assertEqual(record["usage"]["cached_tokens"], 4000)
         self.assertEqual(record["usage"]["output_tokens"], 37)
+        self.assertEqual(record["context_source"], "usage")
         self.assertEqual(record["upstream_model"], "gpt-6-astra")
         self.assertTrue(record["response_completed"])
         self.assertIsInstance(record["request_started_monotonic_ns"], int)
@@ -267,6 +298,21 @@ class ServerTests(unittest.TestCase):
         self.assertLessEqual(record["request_started_monotonic_ns"], record["response_finished_monotonic_ns"])
         self.assertIsNone(record["jev"])
         self.assertNotIn("authorization", json.dumps(record).lower())
+
+    def test_missing_usage_replaces_stale_context_with_request_estimate(self):
+        self.post(True, content="short request", thread_id="usage-fallback")
+        self.assertEqual(self.app.store.get("usage-fallback").last_context_tokens, 4321)
+        self.app.upstream = SimpleNamespace(
+            open_response=lambda *_args: self.response_with_bytes(INCOMPLETE_SSE_BYTES)
+        )
+
+        self.post(True, content="x" * 20_000, thread_id="usage-fallback")
+
+        state = self.app.store.get("usage-fallback")
+        record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
+        self.assertGreater(state.last_context_tokens, 7000)
+        self.assertEqual(record["context_source"], "estimate")
+        self.assertFalse(record["response_completed"])
 
     def test_debug_sentinel_captures_exact_upstream_chunks_and_links_log(self):
         self.app.config.stream_debug_path.touch()
