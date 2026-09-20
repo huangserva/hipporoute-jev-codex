@@ -34,6 +34,9 @@ class RouterConfig:
     jev_timeout_seconds: float
     jev_retries: int
     jev_backoff_seconds: float
+    jev_retry_after_cap_seconds: float
+    jev_circuit_failure_threshold: int
+    jev_circuit_open_seconds: float
     confidence_gate: float
     downgrade_max_context_tokens: int
     switch_budget_usd: float
@@ -67,6 +70,9 @@ DEFAULTS: dict[str, Any] = {
         "timeout_seconds": 4.0,
         "retries": 2,
         "backoff_seconds": 0.25,
+        "retry_after_cap_seconds": 4.0,
+        "circuit_failure_threshold": 3,
+        "circuit_open_seconds": 60.0,
         "confidence_gate": 0.5,
     },
     "routing": {
@@ -141,6 +147,9 @@ def load_config(path: str | Path | None) -> RouterConfig:
         jev_timeout_seconds=float(_value(data, "jev", "timeout_seconds")),
         jev_retries=int(_value(data, "jev", "retries")),
         jev_backoff_seconds=float(_value(data, "jev", "backoff_seconds")),
+        jev_retry_after_cap_seconds=float(_value(data, "jev", "retry_after_cap_seconds")),
+        jev_circuit_failure_threshold=int(_value(data, "jev", "circuit_failure_threshold")),
+        jev_circuit_open_seconds=float(_value(data, "jev", "circuit_open_seconds")),
         confidence_gate=float(_value(data, "jev", "confidence_gate")),
         downgrade_max_context_tokens=int(_value(data, "routing", "downgrade_max_context_tokens")),
         switch_budget_usd=float(_value(data, "routing", "switch_budget_usd")),

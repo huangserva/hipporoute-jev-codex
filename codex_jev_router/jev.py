@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 from copy import deepcopy
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -89,6 +92,7 @@ class JevClient:
         timeout_seconds: float = 4.0,
         retries: int = 2,
         backoff_seconds: float = 0.25,
+        retry_after_cap_seconds: float = 4.0,
         opener: Callable[..., Any] = urllib.request.urlopen,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -98,8 +102,25 @@ class JevClient:
         self.timeout_seconds = timeout_seconds
         self.retries = retries
         self.backoff_seconds = backoff_seconds
+        self.retry_after_cap_seconds = retry_after_cap_seconds
         self.opener = opener
         self.sleeper = sleeper
+
+    def _retry_delay(self, error: urllib.error.HTTPError, attempt: int) -> float:
+        delay = self.backoff_seconds * (2**attempt)
+        raw = error.headers.get("Retry-After") if error.headers is not None else None
+        if raw:
+            try:
+                delay = float(raw)
+            except (TypeError, ValueError):
+                try:
+                    retry_at = parsedate_to_datetime(raw)
+                    if retry_at.tzinfo is None:
+                        retry_at = retry_at.replace(tzinfo=timezone.utc)
+                    delay = (retry_at - datetime.now(timezone.utc)).total_seconds()
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        return min(max(0.0, delay), max(0.0, self.retry_after_cap_seconds))
 
     def ask(
         self,
@@ -126,6 +147,16 @@ class JevClient:
                 if not isinstance(decoded, dict):
                     raise ValueError("Jev response must be an object")
                 return decoded
+            except urllib.error.HTTPError as exc:
+                last_error = exc
+                if 400 <= exc.code < 500 and exc.code != 429:
+                    raise
+                if attempt >= self.retries:
+                    raise
+                if exc.code == 429:
+                    self.sleeper(self._retry_delay(exc, attempt))
+                else:
+                    self.sleeper(self.backoff_seconds * (2**attempt))
             except Exception as exc:
                 last_error = exc
                 if attempt >= self.retries:

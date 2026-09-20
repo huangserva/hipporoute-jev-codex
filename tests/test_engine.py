@@ -419,6 +419,37 @@ class EngineTests(unittest.TestCase):
         self.assertEqual((decision.model, decision.effort), (ASTRA, "medium"))
         self.assertEqual(decision.gate, "jev_error:TimeoutError")
 
+    def test_consecutive_jev_failures_open_circuit_until_cooldown(self):
+        clock = [100.0]
+        self.config = replace(
+            self.config,
+            jev_circuit_failure_threshold=2,
+            jev_circuit_open_seconds=60.0,
+        )
+        key_calls = []
+        fake = FakeJev(error=TimeoutError("late"))
+        engine = self.engine(fake=fake, key_counter=key_calls, monotonic=lambda: clock[0])
+
+        first_headers, first_body = request(thread="circuit-1")
+        second_headers, second_body = request(thread="circuit-2")
+        third_headers, third_body = request(thread="circuit-3")
+        first = engine.decide(first_headers, first_body, len(json.dumps(first_body)))
+        second = engine.decide(second_headers, second_body, len(json.dumps(second_body)))
+        third = engine.decide(third_headers, third_body, len(json.dumps(third_body)))
+
+        self.assertEqual(first.gate, "jev_error:TimeoutError")
+        self.assertEqual(second.gate, "jev_error:TimeoutError")
+        self.assertEqual(third.gate, "jev_circuit_open")
+        self.assertFalse(third.consulted_jev)
+        self.assertEqual(len(fake.states), 2)
+        self.assertEqual(len(key_calls), 2)
+
+        clock[0] += 61
+        fourth_headers, fourth_body = request(thread="circuit-4")
+        fourth = engine.decide(fourth_headers, fourth_body, len(json.dumps(fourth_body)))
+        self.assertEqual(fourth.gate, "jev_error:TimeoutError")
+        self.assertEqual(len(fake.states), 3)
+
     def test_identity_conflict_fails_open_without_state(self):
         engine = self.engine(fake=None, key="")
         headers, body = request()

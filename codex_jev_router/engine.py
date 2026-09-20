@@ -80,6 +80,9 @@ class RouterEngine:
         self._last_gc_at = 0.0
         self._delegation_lock = threading.Lock()
         self._delegations: dict[tuple[str, str], tuple[SpawnDelegation, float]] = {}
+        self._jev_circuit_lock = threading.Lock()
+        self._jev_consecutive_failures = 0
+        self._jev_circuit_open_until = 0.0
 
     def _make_jev(self, key: str) -> JevClient:
         return JevClient(
@@ -89,7 +92,32 @@ class RouterEngine:
             timeout_seconds=self.config.jev_timeout_seconds,
             retries=self.config.jev_retries,
             backoff_seconds=self.config.jev_backoff_seconds,
+            retry_after_cap_seconds=self.config.jev_retry_after_cap_seconds,
         )
+
+    def _jev_circuit_is_open(self) -> bool:
+        with self._jev_circuit_lock:
+            if self._jev_circuit_open_until <= 0:
+                return False
+            if self.monotonic() < self._jev_circuit_open_until:
+                return True
+            self._jev_circuit_open_until = 0.0
+            return False
+
+    def _record_jev_success(self) -> None:
+        with self._jev_circuit_lock:
+            self._jev_consecutive_failures = 0
+            self._jev_circuit_open_until = 0.0
+
+    def _record_jev_failure(self) -> None:
+        with self._jev_circuit_lock:
+            self._jev_consecutive_failures += 1
+            threshold = max(1, self.config.jev_circuit_failure_threshold)
+            if self._jev_consecutive_failures >= threshold:
+                self._jev_circuit_open_until = self.monotonic() + max(
+                    0.0,
+                    self.config.jev_circuit_open_seconds,
+                )
 
     def _timestamp(self) -> str:
         return self.now().isoformat().replace("+00:00", "Z")
@@ -190,6 +218,8 @@ class RouterEngine:
         routing_task: str,
         delegation: dict[str, Any] | None = None,
     ) -> tuple[RouteCandidate, bool, int | None, dict[str, Any] | None]:
+        if self._jev_circuit_is_open():
+            return RouteCandidate(ASTRA, "medium", "default", "jev_circuit_open"), False, None, None
         key = self.key_loader()
         if not key:
             return RouteCandidate(ASTRA, "medium", "default", "no_key"), False, None, None
@@ -219,8 +249,10 @@ class RouterEngine:
                     "confidence": depth_answer.get("confidence"),
                 },
             }
+            self._record_jev_success()
             return candidate, True, int(round((self.monotonic() - started) * 1000)), observation
         except Exception as exc:
+            self._record_jev_failure()
             return (
                 RouteCandidate(
                     ASTRA,

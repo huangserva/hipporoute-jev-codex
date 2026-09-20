@@ -25,6 +25,9 @@ model = "jev-latest"
 timeout_seconds = 4
 retries = 2
 backoff_seconds = 0.25
+retry_after_cap_seconds = 4
+circuit_failure_threshold = 3
+circuit_open_seconds = 60
 confidence_gate = 0.5
 
 [routing]
