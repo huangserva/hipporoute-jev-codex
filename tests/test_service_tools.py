@@ -124,5 +124,97 @@ class ServiceScriptTests(unittest.TestCase):
         self.assertNotIn("TYPESAFE_API_KEY", script)
 
 
+class ShadowReportTests(unittest.TestCase):
+    def test_daily_report_groups_roots_reprices_usage_and_marks_missing(self):
+        module = load_script("shadow_report", "shadow-report.py")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "decisions.jsonl"
+            rows = [
+                {
+                    "at": "2026-09-20T09:00:00+0800",
+                    "thread_id": "parent",
+                    "parent_thread_id": None,
+                    "event": "first_request",
+                    "gate": "apply",
+                    "reason": "jev",
+                    "consulted_jev": True,
+                    "jev_ms": 1000,
+                    "jev": {"tier": {"choice": "gpt-5.6-luna", "confidence": 0.8}},
+                    "shadow": True,
+                    "model": "gpt-6-astra",
+                    "would": {"model": "gpt-5.6-luna"},
+                    "upstream_model": "gpt-6-astra",
+                    "response_completed": True,
+                    "usage": {"input_tokens": 100, "cached_tokens": 0, "output_tokens": 10},
+                },
+                {
+                    "at": "2026-09-20T09:01:00+0800",
+                    "thread_id": "parent",
+                    "event": "tool_continuation",
+                    "gate": "sticky",
+                    "consulted_jev": False,
+                    "jev_ms": None,
+                    "jev": None,
+                    "shadow": True,
+                    "model": "gpt-6-astra",
+                    "would": {"model": "gpt-5.6-luna"},
+                    "upstream_model": "gpt-6-astra",
+                    "response_completed": True,
+                    "usage": {"input_tokens": 100, "cached_tokens": 50, "output_tokens": 10},
+                },
+                {
+                    "at": "2026-09-20T09:02:00+0800",
+                    "thread_id": "child",
+                    "parent_thread_id": "parent",
+                    "event": "subagent_first",
+                    "gate": "apply",
+                    "reason": "low_confidence",
+                    "consulted_jev": True,
+                    "jev_ms": 3000,
+                    "jev": {"tier": {"choice": "gpt-5.6-luna", "confidence": 0.4}},
+                    "shadow": True,
+                    "model": "gpt-6-astra",
+                    "would": {"model": "gpt-5.6-sol"},
+                    "upstream_model": "gpt-6-astra",
+                    "response_completed": False,
+                    "usage": {"input_tokens": None, "cached_tokens": None, "output_tokens": None},
+                },
+                {
+                    "at": "2026-09-20T10:00:00+0800",
+                    "thread_id": "error-root",
+                    "event": "first_request",
+                    "gate": "jev_error:TimeoutError",
+                    "reason": "jev_error",
+                    "consulted_jev": True,
+                    "jev_ms": 5000,
+                    "jev": None,
+                    "shadow": True,
+                    "model": "gpt-6-astra",
+                    "would": {"model": "gpt-6-astra"},
+                    "upstream_model": "gpt-6-astra",
+                    "response_completed": True,
+                    "usage": {"input_tokens": 50, "cached_tokens": 0, "output_tokens": 5},
+                },
+            ]
+            path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+            report = module.build_report([path])
+            day = report["days"]["2026-09-20"]
+
+            self.assertEqual(day["sessions"], 2)
+            self.assertEqual(day["threads"], 3)
+            self.assertEqual(day["decisions"], 3)
+            self.assertEqual(day["would_tiers"], {"astra": 1, "luna": 1, "sol": 1})
+            self.assertEqual(day["raw_jev_tiers"], {"luna": 2})
+            self.assertEqual(day["confidence_bins"]["0.35-0.50"], 1)
+            self.assertEqual(day["confidence_bins"]["0.75-1.00"], 1)
+            self.assertEqual(day["low_confidence_fallbacks"], 1)
+            self.assertEqual(day["jev_errors"], 1)
+            self.assertAlmostEqual(day["jev_error_rate"], 1 / 3)
+            self.assertEqual(day["jev_latency_ms"]["median"], 3000)
+            self.assertEqual(day["usage_rows_missing"], 1)
+            self.assertGreater(day["actual_cost_usd"], day["would_cost_usd"])
+            self.assertGreater(day["projected_savings_usd"], 0)
+
 if __name__ == "__main__":
     unittest.main()
