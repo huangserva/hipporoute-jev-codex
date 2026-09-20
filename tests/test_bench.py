@@ -14,6 +14,7 @@ from bench.run import (
     is_infrastructure_failure,
     read_jsonl_since,
     temporary_codex_config,
+    _write_router_config,
 )
 
 
@@ -102,6 +103,16 @@ class FixtureAndCheckTests(unittest.TestCase):
 
 
 class PersistenceTests(unittest.TestCase):
+    def test_router_config_keeps_debug_capture_inside_run_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "router.toml"
+            _write_router_config(path, root, 4320)
+
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(f'stream_debug = "{root / "stream.debug"}"', text)
+            self.assertIn(f'raw_stream_dir = "{root / "raw-streams"}"', text)
+
     def test_jsonl_slice_starts_at_byte_offset(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "log.jsonl"

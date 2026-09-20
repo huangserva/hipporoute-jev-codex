@@ -360,6 +360,8 @@ state = "{(run_dir / 'threads.json').as_posix()}"
 decision_log = "{(run_dir / 'decisions.jsonl').as_posix()}"
 off = "{(run_dir / 'router.off').as_posix()}"
 shadow = "{(run_dir / 'router.shadow').as_posix()}"
+stream_debug = "{(run_dir / 'stream.debug').as_posix()}"
+raw_stream_dir = "{(run_dir / 'raw-streams').as_posix()}"
 
 [jev]
 timeout_seconds = 4
