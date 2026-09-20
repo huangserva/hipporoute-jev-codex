@@ -205,6 +205,7 @@ class ServerTests(unittest.TestCase):
             status = 200
 
             def __init__(self):
+                self.data = data
                 self.chunks = iter((data, b""))
 
             def getheader(self, _name):
@@ -215,6 +216,9 @@ class ServerTests(unittest.TestCase):
 
             def read1(self, _size):
                 return next(self.chunks)
+
+            def read(self):
+                return self.data
 
         return Connection(), Response()
 
@@ -281,6 +285,18 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(result["id"], "resp_1")
         self.assertEqual(result["output"][0]["id"], "m1")
         self.assertTrue(FakeUpstreamHandler.seen[-1][2]["stream"])
+
+    def test_nonstream_missing_completed_returns_502_json(self):
+        self.app.upstream = SimpleNamespace(
+            open_response=lambda *_args: self.response_with_bytes(INCOMPLETE_SSE_BYTES)
+        )
+
+        status, headers, data = self.post(False, thread_id="nonstream-incomplete")
+
+        self.assertEqual(status, 502)
+        self.assertEqual(headers["Content-Type"], "application/json")
+        payload = json.loads(data)
+        self.assertIn("response.completed", payload["error"]["message"])
 
     def test_completed_usage_updates_thread_state_and_log(self):
         self.post(True)

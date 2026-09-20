@@ -398,6 +398,21 @@ class RouterHandler(BaseHTTPRequestHandler):
                     if assembled is not None:
                         data = json.dumps(assembled, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
                         output_content_type = "application/json"
+                    else:
+                        status = 502
+                        data = json.dumps(
+                            {
+                                "error": {
+                                    "message": (
+                                        "upstream SSE ended without response.completed "
+                                        "or an explicit error event"
+                                    )
+                                }
+                            },
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        ).encode("utf-8")
+                        output_content_type = "application/json"
                 finish_record()
                 self.send_response(status)
                 self.send_header("Content-Type", output_content_type)
