@@ -18,6 +18,9 @@ DEFAULT_STATE_DIR = Path("~/.codex/codex-jev-router").expanduser()
 class RouterConfig:
     listen_host: str
     listen_port: int
+    max_request_body_bytes: int
+    client_socket_timeout_seconds: float
+    max_concurrent_requests: int
     upstream_mode: str
     direct_url: str
     caller_edge_url: str
@@ -49,7 +52,13 @@ class RouterConfig:
 
 
 DEFAULTS: dict[str, Any] = {
-    "server": {"host": "127.0.0.1", "port": 4319},
+    "server": {
+        "host": "127.0.0.1",
+        "port": 4319,
+        "max_request_body_bytes": 16 * 1024 * 1024,
+        "client_socket_timeout_seconds": 30.0,
+        "max_concurrent_requests": 64,
+    },
     "upstream": {
         "mode": "direct",
         "direct_url": "https://chatgpt.com/backend-api/codex",
@@ -133,9 +142,24 @@ def load_config(path: str | Path | None) -> RouterConfig:
     luna_effort = str(_value(data, "routing", "luna_effort"))
     if luna_effort not in EFFORTS:
         raise ValueError(f"routing.luna_effort must be one of {EFFORTS}")
+    max_request_body_bytes = int(_value(data, "server", "max_request_body_bytes"))
+    client_socket_timeout_seconds = float(
+        _value(data, "server", "client_socket_timeout_seconds")
+    )
+    max_concurrent_requests = int(_value(data, "server", "max_concurrent_requests"))
+    for key, value in (
+        ("max_request_body_bytes", max_request_body_bytes),
+        ("client_socket_timeout_seconds", client_socket_timeout_seconds),
+        ("max_concurrent_requests", max_concurrent_requests),
+    ):
+        if value <= 0:
+            raise ValueError(f"server.{key} must be positive")
     return RouterConfig(
         listen_host=str(_value(data, "server", "host")),
         listen_port=int(_value(data, "server", "port")),
+        max_request_body_bytes=max_request_body_bytes,
+        client_socket_timeout_seconds=client_socket_timeout_seconds,
+        max_concurrent_requests=max_concurrent_requests,
         upstream_mode=upstream_mode,
         direct_url=str(_value(data, "upstream", "direct_url")),
         caller_edge_url=str(_value(data, "upstream", "caller_edge_url")),

@@ -31,8 +31,9 @@ class _ClientError(Exception):
         self.message = message
 
 
-def _read_chunked(stream) -> bytes:
+def _read_chunked(stream, *, max_bytes: int) -> bytes:
     chunks = []
+    total = 0
     while True:
         line = stream.readline()
         if not line:
@@ -42,6 +43,9 @@ def _read_chunked(stream) -> bytes:
             while stream.readline() not in (b"\r\n", b"\n", b""):
                 pass
             return b"".join(chunks)
+        total += size
+        if total > max_bytes:
+            raise _ClientError(413, "request body too large")
         chunk = stream.read(size)
         if len(chunk) != size or stream.read(2) != b"\r\n":
             raise ConnectionError("invalid chunked request body")
@@ -155,6 +159,7 @@ class RouterHTTPServer(ThreadingHTTPServer):
 
     def __init__(self, address, handler, app: RouterApp):
         self.app = app
+        self.request_slots = threading.BoundedSemaphore(app.config.max_concurrent_requests)
         super().__init__(address, handler)
 
     def handle_error(self, request, client_address) -> None:
@@ -166,6 +171,10 @@ class RouterHTTPServer(ThreadingHTTPServer):
 class RouterHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = f"codex-jev-router/{__version__}"
+
+    def setup(self) -> None:
+        self.request.settimeout(self.server.app.config.client_socket_timeout_seconds)
+        super().setup()
 
     def log_message(self, *_args):
         pass
@@ -213,6 +222,10 @@ class RouterHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._headers_sent = False
         self._active_capture = None
+        if not self.server.request_slots.acquire(blocking=False):
+            self._log_rejection("server_busy", 503)
+            self._json(503, {"error": {"message": "server busy"}})
+            return
         try:
             self._post()
         except _ClientError as exc:
@@ -232,6 +245,26 @@ class RouterHandler(BaseHTTPRequestHandler):
                 self._json(502, {"error": {"message": f"codex-jev-router: {type(exc).__name__}"}})
             except (BrokenPipeError, ConnectionResetError):
                 pass
+        finally:
+            self.server.request_slots.release()
+
+    def _log_rejection(self, gate: str, status: int) -> None:
+        try:
+            self.server.app.logger.append(
+                {
+                    "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                    "thread_id": self.headers.get("thread-id"),
+                    "event": "request_rejected",
+                    "gate": gate,
+                    "status": status,
+                }
+            )
+        except OSError as exc:
+            print(
+                f"[codex-jev-router] rejection log failed: {type(exc).__name__}",
+                file=sys.stderr,
+                flush=True,
+            )
 
     def _capture_event(self, name: str, **fields: Any) -> None:
         capture = getattr(self, "_active_capture", None)
@@ -248,7 +281,10 @@ class RouterHandler(BaseHTTPRequestHandler):
 
     def _read_body(self) -> bytes:
         if "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
-            return _read_chunked(self.rfile)
+            return _read_chunked(
+                self.rfile,
+                max_bytes=self.server.app.config.max_request_body_bytes,
+            )
         raw_length = self.headers.get("Content-Length") or "0"
         try:
             length = int(raw_length)
@@ -256,6 +292,8 @@ class RouterHandler(BaseHTTPRequestHandler):
             raise _ClientError(400, "invalid Content-Length") from exc
         if length < 0:
             raise _ClientError(400, "invalid Content-Length")
+        if length > self.server.app.config.max_request_body_bytes:
+            raise _ClientError(413, "request body too large")
         body = self.rfile.read(length)
         if len(body) != length:
             raise ConnectionError("incomplete request body")

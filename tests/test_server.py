@@ -6,11 +6,12 @@ import threading
 import unittest
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
 from codex_jev_router.config import load_config
-from codex_jev_router.server import build_app, make_server
+from codex_jev_router.server import RouterHandler, _read_chunked, build_app, make_server
 from codex_jev_router.server import relay_sse_response
 from codex_jev_router.sse import SSEUsageTracker
 from codex_jev_router.stream_debug import RawStreamCapture
@@ -252,6 +253,72 @@ class ServerTests(unittest.TestCase):
 
         self.assertTrue(raw.startswith(b"HTTP/1.1 400"))
         self.assertIn(b"invalid Content-Length", raw)
+
+    def test_content_length_over_limit_returns_413_without_reading_body(self):
+        request = (
+            b"POST /v1/responses HTTP/1.1\r\n"
+            + f"Host: 127.0.0.1:{self.server.server_port}\r\n".encode()
+            + b"Content-Type: application/json\r\n"
+            + f"Content-Length: {self.app.config.max_request_body_bytes + 1}\r\n".encode()
+            + b"Connection: close\r\n\r\n"
+        )
+        with socket.create_connection(("127.0.0.1", self.server.server_port), timeout=5) as sock:
+            sock.sendall(request)
+            raw = b""
+            while chunk := sock.recv(65536):
+                raw += chunk
+
+        self.assertTrue(raw.startswith(b"HTTP/1.1 413"))
+        self.assertIn(b"request body too large", raw)
+
+    def test_chunked_body_over_limit_returns_413(self):
+        encoded = b"4\r\nabcd\r\n4\r\nefgh\r\n0\r\n\r\n"
+
+        with self.assertRaisesRegex(Exception, "request body too large") as caught:
+            _read_chunked(BytesIO(encoded), max_bytes=7)
+
+        self.assertEqual(caught.exception.status, 413)
+
+    def test_handler_applies_configured_client_socket_timeout(self):
+        class FakeSocket:
+            def __init__(self):
+                self.timeout = None
+
+            def settimeout(self, value):
+                self.timeout = value
+
+            def makefile(self, *_args):
+                return BytesIO()
+
+        handler = object.__new__(RouterHandler)
+        handler.request = FakeSocket()
+        handler.server = SimpleNamespace(app=self.app)
+
+        handler.setup()
+
+        self.assertEqual(handler.connection.timeout, self.app.config.client_socket_timeout_seconds)
+
+    def test_concurrency_limit_returns_503_and_logs_server_busy(self):
+        acquired = []
+        try:
+            for _ in range(self.app.config.max_concurrent_requests):
+                self.assertTrue(self.server.request_slots.acquire(blocking=False))
+                acquired.append(True)
+
+            status, _headers, data = self.post(True, thread_id="overloaded")
+        finally:
+            for _ in acquired:
+                self.server.request_slots.release()
+
+        self.assertEqual(status, 503)
+        self.assertIn("server busy", json.loads(data)["error"]["message"])
+        record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
+        self.assertEqual((record["event"], record["gate"], record["status"]), (
+            "request_rejected",
+            "server_busy",
+            503,
+        ))
+        self.assertEqual(record["thread_id"], "overloaded")
 
     def test_direct_upstream_receives_one_content_type_header(self):
         self.post(True)

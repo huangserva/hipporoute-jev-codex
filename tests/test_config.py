@@ -10,6 +10,9 @@ class ConfigTests(unittest.TestCase):
     def test_defaults_match_phase_one_policy(self):
         config = load_config(None)
         self.assertEqual((config.listen_host, config.listen_port), ("127.0.0.1", 4319))
+        self.assertEqual(config.max_request_body_bytes, 16 * 1024 * 1024)
+        self.assertEqual(config.client_socket_timeout_seconds, 30.0)
+        self.assertEqual(config.max_concurrent_requests, 64)
         self.assertEqual(config.upstream_mode, "direct")
         self.assertEqual(config.downgrade_max_context_tokens, 20_000)
         self.assertEqual(config.switch_budget_usd, 0.25)
@@ -32,6 +35,9 @@ class ConfigTests(unittest.TestCase):
                 """
 [server]
 port = 9999
+max_request_body_bytes = 4096
+client_socket_timeout_seconds = 12
+max_concurrent_requests = 7
 [upstream]
 mode = "caller_edge"
 caller_edge_url = "http://127.0.0.1:4202"
@@ -49,6 +55,9 @@ luna_effort = "medium"
             config = load_config(path)
 
         self.assertEqual(config.listen_port, 9999)
+        self.assertEqual(config.max_request_body_bytes, 4096)
+        self.assertEqual(config.client_socket_timeout_seconds, 12.0)
+        self.assertEqual(config.max_concurrent_requests, 7)
         self.assertEqual(config.upstream_mode, "caller_edge")
         self.assertEqual(config.state_path, Path("./state.json"))
         self.assertEqual(config.stream_debug_path, Path("./stream.debug"))
@@ -64,6 +73,18 @@ luna_effort = "medium"
 
             with self.assertRaisesRegex(ValueError, "luna_effort"):
                 load_config(path)
+
+    def test_nonpositive_server_resource_limits_are_rejected(self):
+        for key, value in (
+            ("max_request_body_bytes", 0),
+            ("client_socket_timeout_seconds", 0),
+            ("max_concurrent_requests", -1),
+        ):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "config.toml"
+                path.write_text(f"[server]\n{key} = {value}\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, key):
+                    load_config(path)
 
 
 if __name__ == "__main__":

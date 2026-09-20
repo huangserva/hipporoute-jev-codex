@@ -1,6 +1,9 @@
 [server]
 host = "127.0.0.1"
 port = 4319
+max_request_body_bytes = 16777216
+client_socket_timeout_seconds = 30
+max_concurrent_requests = 64
 
 [upstream]
 # "direct" uses the ChatGPT Codex backend and honors HTTPS_PROXY.
