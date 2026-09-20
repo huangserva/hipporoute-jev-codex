@@ -12,7 +12,7 @@
 - 强制上游 `stream: true`，逐字节 SSE 透传并重新声明 `Content-Type`
 - 调用方请求非流式时，用 `response.completed` 组装 JSON
 - 支持 chunked 请求和 chunked SSE 响应
-- 线程状态原子落盘，决策日志以权限 `0600` 的 JSONL 写入
+- 线程状态在内存标脏、后台合并原子落盘，决策日志以权限 `0600` 的 JSONL 写入
 - debug 哨兵开启时，每条上游流按原始 chunk 与时间戳写入独立 0600 JSONL
 - 直连 ChatGPT Codex 后端，或经 Codex Router caller edge 使用共享登录态
 - 遵守系统 `HTTPS_PROXY`；不需要也不读取 OpenAI API key
@@ -39,6 +39,8 @@
 | `subagent_first` | 调 Jev，按子线程独立钉住 |
 
 `tool_continuation` 和同轮 `reuse` 都沿用现有状态。子 agent 的 Jev state 包含 `parent_tier`、`agent_name`、`subagent_kind` 和委托来源；路由 instructions 明确要求只评估子任务。Jev 低于 `0.5` 置信度时回退 `gpt-5.6-sol`；缺 key、超时或响应异常时 fail-open 到 `gpt-6-astra@medium`。Jev 单次超时 4 秒，失败后最多重试 2 次，退避为 0.25、0.5 秒；HTTP 4xx 除 429 外不重试，429 遵守有上限的 `Retry-After`。默认连续 3 次失败后熔断 60 秒，期间以 `gate=jev_circuit_open` 直接 fail-open。参数位于 `[jev]`。
+
+父线程任务若同时明确包含子 agent、并行派发和等待汇总三类语义，路由器会向 Jev state 增加 `coordination_hint=fanout_coordinator`；tier instructions 同时说明“只委托并汇总、不亲自执行”的协调任务属于 Luna。该 hint 只辅助 Jev 判断，不绕过 0.5 门槛，也不硬编码最终模型。
 
 Luna 默认使用 `effort=low` 和 `service_tier=priority`；这是 T3 机械任务基准中通过率不变且步数、墙钟和费用最低的设置。可用 `[routing] luna_effort = "medium"` 或 `"max"` 调高 effort，service tier 不随该配置改变。
 
