@@ -172,6 +172,26 @@ class EngineTests(unittest.TestCase):
             },
         )
 
+    def test_engine_applies_configured_luna_effort(self):
+        self.config = replace(self.config, luna_effort="low")
+        fake = FakeJev(
+            answers=[
+                {
+                    "answers": {
+                        "tier": {"choice": LUNA, "confidence": 0.9},
+                        "depth": {"choice": "high"},
+                    }
+                }
+            ]
+        )
+        engine = self.engine(fake=fake)
+        headers, body = request()
+
+        decision = engine.decide(headers, body, len(json.dumps(body)))
+
+        self.assertEqual((decision.model, decision.effort), (LUNA, "low"))
+        self.assertEqual(decision.service_tier, "priority")
+
     def test_no_key_fails_open_and_pins_astra_medium(self):
         engine = self.engine(fake=None, key="")
         headers, body = request()

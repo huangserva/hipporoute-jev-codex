@@ -308,7 +308,11 @@ def clamp_effort(depth: Any) -> str:
 
 
 def candidate_from_jev(
-    tier: Any, depth: Any, confidence: Any, confidence_gate: float = 0.5
+    tier: Any,
+    depth: Any,
+    confidence: Any,
+    confidence_gate: float = 0.5,
+    luna_effort: str = "max",
 ) -> RouteCandidate:
     if tier not in TIERS or not isinstance(confidence, (int, float)):
         raise ValueError("invalid Jev tier answer")
@@ -316,7 +320,7 @@ def candidate_from_jev(
     if confidence < confidence_gate:
         return RouteCandidate(SOL, effort, "default", "low_confidence")
     if tier == LUNA:
-        return RouteCandidate(LUNA, "max", "priority", "jev")
+        return RouteCandidate(LUNA, clamp_effort(luna_effort), "priority", "jev")
     return RouteCandidate(tier, effort, "default", "jev")
 
 

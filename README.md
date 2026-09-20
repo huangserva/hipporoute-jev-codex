@@ -40,6 +40,8 @@
 
 `tool_continuation` 和同轮 `reuse` 都沿用现有状态。子 agent 的 Jev state 包含 `parent_tier`、`agent_name`、`subagent_kind` 和委托来源；路由 instructions 明确要求只评估子任务。Jev 低于 `0.5` 置信度时回退 `gpt-5.6-sol`；缺 key、超时或响应异常时 fail-open 到 `gpt-6-astra@medium`。Jev 单次超时 4 秒，失败后最多重试 2 次，退避为 0.25、0.5 秒；HTTP 4xx 除 429 外不重试，429 遵守有上限的 `Retry-After`。默认连续 3 次失败后熔断 60 秒，期间以 `gate=jev_circuit_open` 直接 fail-open。参数位于 `[jev]`。
 
+Luna 默认仍使用 `effort=max` 和 `service_tier=priority`。可用 `[routing] luna_effort = "medium"` 或 `"low"` 调整 effort；默认值保持 `max`，以保证历史基准可比，service tier 不随该配置改变。
+
 Codex CLI 0.155.1 会把具体委托 payload 以 `encrypted_content` 发给后端，所以边界路由器当前以 `agent_name/task_name` 加已标注的父任务上下文作分档输入，并记 `delegation_source=agent_name_fallback`。代码已预留对未来明文 `NEW_TASK Payload` 和明文 spawn `message` 的优先提取；不尝试解密。
 
 同一 thread id 的决策临界区由 per-thread lock 串行化。状态按 `last_active_at` 做保守 GC，默认 TTL 是 86400 秒、GC 间隔是 300 秒，可在 `[routing]` 的 `state_ttl_seconds` 和 `state_gc_interval_seconds` 修改。

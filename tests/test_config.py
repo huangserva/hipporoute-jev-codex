@@ -18,6 +18,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.jev_retry_after_cap_seconds, 4.0)
         self.assertEqual(config.jev_circuit_failure_threshold, 3)
         self.assertEqual(config.jev_circuit_open_seconds, 60.0)
+        self.assertEqual(config.luna_effort, "max")
         self.assertEqual(config.stream_debug_path, Path.home() / ".codex/codex-jev-router/stream.debug")
         self.assertEqual(config.raw_stream_dir, Path.home() / ".codex/codex-jev-router/raw-streams")
         self.assertEqual(config.prices[ASTRA].cache_write, 12.50)
@@ -41,6 +42,7 @@ raw_stream_dir = "./raw-streams"
 [routing]
 state_ttl_seconds = 7200
 state_gc_interval_seconds = 60
+luna_effort = "medium"
 """,
                 encoding="utf-8",
             )
@@ -53,6 +55,15 @@ state_gc_interval_seconds = 60
         self.assertEqual(config.raw_stream_dir, Path("./raw-streams"))
         self.assertEqual(config.state_ttl_seconds, 7200)
         self.assertEqual(config.state_gc_interval_seconds, 60)
+        self.assertEqual(config.luna_effort, "medium")
+
+    def test_invalid_luna_effort_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text('[routing]\nluna_effort = "extreme"\n', encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "luna_effort"):
+                load_config(path)
 
 
 if __name__ == "__main__":

@@ -258,6 +258,7 @@ class RouterEngine:
                 depth_answer.get("choice"),
                 tier_answer.get("confidence"),
                 self.config.confidence_gate,
+                self.config.luna_effort,
             )
             observation = {
                 "tier": {

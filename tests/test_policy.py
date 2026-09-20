@@ -288,6 +288,17 @@ class CandidateAndCostTests(unittest.TestCase):
         candidate = candidate_from_jev(LUNA, "low", 0.9, confidence_gate=0.5)
         self.assertEqual((candidate.model, candidate.effort), (LUNA, "max"))
 
+    def test_luna_effort_can_be_overridden_without_changing_service_tier(self):
+        candidate = candidate_from_jev(
+            LUNA,
+            "high",
+            0.9,
+            confidence_gate=0.5,
+            luna_effort="medium",
+        )
+        self.assertEqual((candidate.model, candidate.effort), (LUNA, "medium"))
+        self.assertEqual(candidate.service_tier, "priority")
+
     def test_downgrade_over_context_threshold_is_rejected(self):
         gate = switch_gate(20_001, ASTRA, SOL, self.prices, 0.25, 20_000)
         self.assertFalse(gate.allowed)
