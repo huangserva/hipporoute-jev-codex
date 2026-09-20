@@ -1,11 +1,13 @@
 import http.client
 import json
+import socket
 import tempfile
 import threading
 import unittest
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 from codex_jev_router.config import load_config
 from codex_jev_router.server import build_app, make_server
@@ -125,6 +127,67 @@ class ServerTests(unittest.TestCase):
         conn.close()
         return result
 
+    def raw_post(self, *, thread_id="raw-thread"):
+        metadata = {"thread_id": thread_id, "turn_id": "turn-1", "thread_source": "user"}
+        body = json.dumps(
+            {
+                "model": "auto",
+                "stream": True,
+                "input": [{"type": "message", "role": "user", "content": "Say OK"}],
+                "client_metadata": {"thread_id": thread_id, "turn_id": "turn-1"},
+            }
+        ).encode()
+        request = (
+            b"POST /v1/responses HTTP/1.1\r\n"
+            + f"Host: 127.0.0.1:{self.server.server_port}\r\n".encode()
+            + b"Content-Type: application/json\r\n"
+            + f"Content-Length: {len(body)}\r\n".encode()
+            + f"thread-id: {thread_id}\r\n".encode()
+            + b"x-codex-turn-metadata: "
+            + json.dumps(metadata, separators=(",", ":")).encode()
+            + b"\r\nConnection: close\r\n\r\n"
+            + body
+        )
+        with socket.create_connection(("127.0.0.1", self.server.server_port), timeout=5) as sock:
+            sock.settimeout(5)
+            sock.sendall(request)
+            chunks = []
+            while True:
+                try:
+                    chunk = sock.recv(65536)
+                except (ConnectionResetError, socket.timeout):
+                    break
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        return b"".join(chunks)
+
+    @staticmethod
+    def failing_stream_response():
+        class Connection:
+            def close(self):
+                pass
+
+        class Response:
+            status = 200
+
+            def __init__(self):
+                self.calls = 0
+
+            def getheader(self, _name):
+                return None
+
+            def getheaders(self):
+                return []
+
+            def read1(self, _size):
+                self.calls += 1
+                if self.calls == 1:
+                    return SSE_BYTES[:40]
+                raise http.client.IncompleteRead(b"", 10)
+
+        return Connection(), Response()
+
     def test_health_and_models_endpoints(self):
         conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
         conn.request("GET", "/health")
@@ -154,6 +217,31 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(forwarded["stream"])
         self.assertEqual(forwarded["model"], "gpt-6-astra")
         self.assertEqual(forwarded["reasoning"]["effort"], "medium")
+
+    def test_midstream_incomplete_read_never_writes_second_http_response(self):
+        self.app.config.stream_debug_path.touch()
+        self.app.upstream = SimpleNamespace(
+            open_response=lambda *_args: self.failing_stream_response()
+        )
+
+        raw = self.raw_post(thread_id="incomplete-read")
+
+        self.assertEqual(raw.count(b"HTTP/1.1 "), 1)
+        self.assertTrue(raw.startswith(b"HTTP/1.1 200"))
+        capture_file = next(self.app.config.raw_stream_dir.glob("*.jsonl"))
+        events = [json.loads(line)["event"] for line in capture_file.read_text().splitlines()]
+        self.assertIn("upstream_error", events)
+
+    def test_state_write_failure_after_headers_never_writes_second_http_response(self):
+        def fail_state_write(_thread_id, _tokens):
+            raise OSError("state path became unwritable")
+
+        self.app.engine.record_usage = fail_state_write
+
+        raw = self.raw_post(thread_id="state-write-failure")
+
+        self.assertEqual(raw.count(b"HTTP/1.1 "), 1)
+        self.assertTrue(raw.startswith(b"HTTP/1.1 200"))
 
     def test_nonstream_caller_receives_assembled_json(self):
         status, headers, data = self.post(False)

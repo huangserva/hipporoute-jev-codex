@@ -169,6 +169,7 @@ class RouterHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
+        self._headers_sent = True
         self.wfile.write(body)
 
     def do_GET(self):
@@ -203,15 +204,35 @@ class RouterHandler(BaseHTTPRequestHandler):
         return self._json(404, {"error": {"message": "not found"}})
 
     def do_POST(self):
+        self._headers_sent = False
+        self._active_capture = None
         try:
             self._post()
         except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
             return
         except Exception as exc:
+            if self._headers_sent:
+                self._capture_event("handler_error", error=type(exc).__name__)
+                self.close_connection = True
+                return
             try:
                 self._json(502, {"error": {"message": f"codex-jev-router: {type(exc).__name__}"}})
             except (BrokenPipeError, ConnectionResetError):
                 pass
+
+    def _capture_event(self, name: str, **fields: Any) -> None:
+        capture = getattr(self, "_active_capture", None)
+        if capture is None:
+            return
+        try:
+            capture.event(name, **fields)
+        except OSError as exc:
+            print(
+                f"[codex-jev-router] capture event failed: {type(exc).__name__}",
+                file=sys.stderr,
+                flush=True,
+            )
 
     def _read_body(self) -> bytes:
         if "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
@@ -264,6 +285,7 @@ class RouterHandler(BaseHTTPRequestHandler):
             request_id=request_id,
             thread_id=decision.identity.thread_id,
         )
+        self._active_capture = capture
         recorded = False
 
         def finish_record() -> None:
@@ -272,9 +294,16 @@ class RouterHandler(BaseHTTPRequestHandler):
                 return
             tracker.finish()
             usage = tracker.usage
-            self.server.app.engine.record_usage(decision.identity.thread_id, usage.input_tokens)
-            self.server.app.logger.append(
-                {
+            try:
+                self.server.app.engine.record_usage(decision.identity.thread_id, usage.input_tokens)
+            except OSError as exc:
+                self._capture_event("record_error", stage="state", error=type(exc).__name__)
+                print(
+                    f"[codex-jev-router] state record failed: {type(exc).__name__}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            record = {
                     "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                     "thread_id": decision.identity.thread_id,
                     "turn_id": decision.identity.turn_id,
@@ -310,7 +339,15 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "response_finished_monotonic_ns": time.monotonic_ns(),
                     "stream_capture": capture.relative_name,
                 }
-            )
+            try:
+                self.server.app.logger.append(record)
+            except OSError as exc:
+                self._capture_event("record_error", stage="decision_log", error=type(exc).__name__)
+                print(
+                    f"[codex-jev-router] decision log failed: {type(exc).__name__}",
+                    file=sys.stderr,
+                    flush=True,
+                )
             recorded = True
 
         try:
@@ -328,6 +365,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
+                self._headers_sent = True
                 downstream_connected = relay_sse_response(response, self.wfile, tracker, capture)
                 finish_record()
                 if downstream_connected:
@@ -354,12 +392,20 @@ class RouterHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", output_content_type)
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
+                self._headers_sent = True
                 self.wfile.write(data)
         finally:
             if connection is not None:
                 connection.close()
             finish_record()
-            capture.close(response_completed=tracker.response_completed)
+            try:
+                capture.close(response_completed=tracker.response_completed)
+            except OSError as exc:
+                print(
+                    f"[codex-jev-router] stream capture close failed: {type(exc).__name__}",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
 
 def make_server(address, app: RouterApp) -> RouterHTTPServer:
