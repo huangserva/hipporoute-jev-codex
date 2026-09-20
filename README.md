@@ -59,7 +59,34 @@ stay_cost   = context_tokens × current.cached_input / 1_000_000
 
 两者差额超过 `$0.25` 时保持当前路由；上下文超过 `20000` token 时拒绝降级。同模型只改变 effort 不会重建 prompt cache，因此直接按 cache-read 成本放行。上下文优先取上一响应 `response.completed.usage.input_tokens`，缺失时按本请求字符数估算，决策日志用 `context_source=usage|estimate` 标明来源。价格和阈值都在 TOML 中可改。
 
-## 启动
+## 常驻 shadow 安装（macOS）
+
+T5 推荐路径是用户级 launchd。安装器生成 `~/Library/LaunchAgents/com.jev.codex-jev-router.plist`，设置 `RunAtLoad + KeepAlive`，并显式向无 shell 环境的 launchd 注入 `HTTPS_PROXY=http://127.0.0.1:7897`。key 不进入 plist，仍从权限 0600 的 `~/.jev.env` 读取。
+
+```bash
+cd <home>/development/Jev/codex-jev-router
+scripts/install-service.sh
+scripts/enable.sh
+```
+
+`enable.sh` 先要求 `/health` 同时返回 `ok=true`、`jev_key=true`，再保存带时间戳的完整 `~/.codex/config.toml` 备份、建立 shadow 哨兵，最后切 provider；重复运行不会增加恢复点。恢复时运行：
+
+```bash
+scripts/disable.sh                 # 还原配置，服务继续待命
+scripts/disable.sh --stop-service  # 还原后同时停 launchd 服务
+```
+
+如果启用后手工改过 Codex 配置，disable 会拒绝静默覆盖，并显示原始备份路径；确认要舍弃后续修改时才使用 `scripts/disable.sh --force`。服务日志在 `~/Library/Logs/codex-jev-router.{out,err}.log`。launchd 不可用时可定期运行 `scripts/watchdog.sh`；它先尝试 kickstart，仍失败才用同样代理环境直接后台启动。
+
+一周 shadow 汇总使用：
+
+```bash
+scripts/shadow-report.py --days 7 ~/.codex/codex-jev-router/decisions.jsonl
+```
+
+费用列是在相同 completed usage 上按 BACKTEST 价格重定价，不预测真路由改变执行步数后的费用；缺 completed/usage 的行会单列而不会静默忽略。安装、桌面 App 验证和应急操作见 `docs/2026-09-21-T5-安装.md`。
+
+## 手工启动
 
 ```bash
 cp config.example.toml config.local.toml
@@ -91,7 +118,7 @@ wire_api = "responses"
 requires_openai_auth = true
 ```
 
-这会使用 Codex 的 ChatGPT 订阅登录态。修改前务必备份 `~/.codex/config.toml`，实验结束恢复。
+这会使用 Codex 的 ChatGPT 订阅登录态。手工修改前务必备份 `~/.codex/config.toml`；常驻安装优先使用上面的幂等脚本。
 
 ### 通过 Codex Router 部署（生产形态）
 

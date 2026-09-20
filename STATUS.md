@@ -1,4 +1,6 @@
-# 常驻部署前状态
+# T5 常驻 shadow 状态
+
+截至 2026-09-20，`com.jev.codex-jev-router` 已作为当前用户 LaunchAgent 运行，Codex CLI 与 ChatGPT.app 包内 Codex 均真实经过本路由器；`~/.codex/config.toml` 有校验备份并长期保持本地 provider，shadow soak 已开始。GUI 宿主仍需用户完全退出并重开 ChatGPT 后发一条任务完成最后确认。
 
 ## 当前默认参数
 
@@ -37,7 +39,7 @@
 - 完成子 agent 委托提取、独立 Jev 上下文和父子链日志；子线程不无条件继承父模型。
 - 完成 per-thread 决策锁和默认 24 小时状态 TTL/保守 GC；状态过期时同步保守回收空闲锁。
 - 完成 T2 原始上游流捕获和缺 completed 根因修复；客户端断开后继续排空上游，同任务 6 次、127 请求缺失率为 0。
-- 完成 123 项离线单元测试，覆盖委托提取、协调 hint、子线程独立决策、同线程并发只决策一次、GC、后台状态刷新、HTTP 资源边界、跨块上游首块嗅探、真实压缩 fixture、Jev 重试/熔断、SSE 异常生命周期、原始流捕获、断开后排空、长父线程和调参基准驱动。
+- 完成 131 项离线单元测试，覆盖委托提取、协调 hint、子线程独立决策、同线程并发只决策一次、GC、后台状态刷新、HTTP 资源边界、跨块上游首块嗅探、真实压缩 fixture、Jev 重试/熔断、SSE 异常生命周期、原始流捕获、断开后排空、长父线程、调参基准与 T5 配置/服务/周报工具。
 - 修复评审 A1–A5、B1、B2、B5、B8、B9：包括已发 SSE 头后禁止二次响应、同模型 effort 成本、更可靠的 usage 兜底、非流式缺 completed 返回 502、key loader fail-open 与上游连接回收。详见 `docs/2026-09-20-评审修复.md`。
 - 修复常驻相关 B3、B6、B7：状态后台合并刷新；请求体/socket/并发上限；200 无 Content-Type 的响应按首块区分 SSE 与 JSON。
 - 用真实 Jev key 完成 shadow 与真路由对照；`response.completed.model` 证明 luna/astra 实际切换，详见 `docs/2026-09-19-真实Jev端到端.md`。
@@ -48,12 +50,14 @@
 - 完成 T4 Jev 门槛基准：0.35/0.5 各 12 个 fan-out 会话全部通过；0.35 总费用低 8.46%，但目标置信度带样本只有 3 个，尚不足以直接修改生产默认值。
 - 协调任务修正后重跑 s2 live 3 遍：父线程 raw Luna 置信度为 0.99/0.98/0.99，全部实际由 `luna@low` 服务且 3/3 通过；父线程费用中位数相对 T4 降低 96.5%。
 - 完成 Codex CLI 0.155.1 真实端到端：两个用户轮次、至少两次工具续跑和一个原生子 agent；无 Jev key 时决策点均正确记为 `no_key` 并走 `astra@medium`。
-- 端到端实验后已恢复 `~/.codex/config.toml`，恢复文件与实验前备份的 SHA-256 一致。
+- 完成 T5 launchd 安装：`RunAtLoad + KeepAlive`、显式 7897 HTTPS 代理、health/key 门禁、幂等 enable/disable、哈希保护的一键还原与 watchdog 回退。
+- 完成 T5 CLI 实流量：系统 Codex 0.155.1 和 ChatGPT.app 内置 Codex 0.155.0-alpha.9.2 都识别 `provider=codex-jev-router`，日志 `gate=apply`、`shadow=true`，上游 completed model 为 astra。
+- 增加按日 shadow 周报：根会话/线程、决策、would/置信度、低置信回退、Jev 错误/延迟、固定轨迹费用估算和 usage 缺失均可审计。
 
 ## 本阶段未做
 
 - 未实现 Codex-dry 备用梯队。
-- 未实现旧路由器的调试抓包、用量汇总、launchd/watchdog 安装器和 UI reasoning summary 标记。
+- 未实现 UI reasoning summary 标记。
 - `SummaryMarker` 仅保留了关闭的配置位，尚未向 SSE 插入可见路由标记。
 - 真实 Jev 基准目前只覆盖 8 个单 agent 任务和 4 个 fan-out 任务、每格 3 次；T3/T4 虽增加了参数重复实验，仍没有覆盖多仓库、多语言、长任务或人工质量评分。
 - 未在本机安装 Codex Router，因此 caller edge 仅有协议/路径单测，真实端到端使用直连模式。
@@ -72,12 +76,14 @@
 - 客户端 `accept-encoding` 尚未显式剥离（B10）；未来客户端若请求 gzip，上游流解析可能失效。
 - 协调 hint 依赖明确的“子 agent + 并行派发 + 等待汇总”措辞；隐式协调任务仍可能漏判。s2 只有 3 个有效样本，尚不能代表所有 fan-out 协调任务。
 - 后台状态刷新已覆盖单测与正常退出，但尚未做进程崩溃、磁盘满恢复和数万线程长跑测试。
+- 桌面 App 包内 Codex 已验证，但 GUI 宿主是否在完全重启后读取同一 provider 仍待用户发一条实际任务确认；不能用包内 CLI 结果冒充 GUI 验收。
+- 决策日志尚无轮转/保留策略；一周 soak 期间需观察体积，报告脚本不会删除原始日志。
 
-## 距离常驻部署还差什么
+## T5 soak 与后续工作
 
-1. 做至少一周 shadow/live soak：覆盖路由器重启、磁盘写失败恢复、并发峰值、状态文件增长与日志轮转。
+1. 当前先跑一周 shadow soak；结束后运行 `scripts/shadow-report.py --days 7`，再决定是否删除 shadow 哨兵真开路由。
 2. 增加状态 schema 版本告警/迁移（B4），并为决策日志与 raw stream 提供轮转和保留策略。
 3. 显式剥离或处理 `accept-encoding`（B10），增加可选本地鉴权（B11）。
-4. 增加 launchd/systemd 服务文件、健康检查、自动重启和优雅停机验收；目前仍主要是手工启动形态。
+4. 做进程崩溃、磁盘满恢复、并发峰值、数万线程状态增长和日志轮转的长期故障注入。
 5. 在安装 Codex Router 的机器上做 caller edge 真实验收，验证 caller secret、shared session、目录刷新和服务托管。
 6. 扩大人工质量样本，覆盖隐式协调、嵌套/fork 子 agent、多仓库、多语言和高风险任务；每次升级 Codex CLI 重放压缩与子线程真实 fixture。
