@@ -1,5 +1,6 @@
 import json
 import unittest
+from pathlib import Path
 
 from codex_jev_router.policy import (
     ASTRA,
@@ -22,6 +23,12 @@ ROOT = "01a0-root"
 CHILD = "01a0-child"
 TURN_1 = "01a0-turn-1"
 TURN_2 = "01a0-turn-2"
+FIXTURES = Path(__file__).with_name("fixtures")
+
+
+def compaction_fixture():
+    with open(FIXTURES / "codex-0.155.1-compaction-request.json", encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def payload(thread_id=ROOT, turn_id=TURN_1, input_items=None):
@@ -204,19 +211,26 @@ class RequestClassificationTests(unittest.TestCase):
         )
         self.assertEqual(facts.step_type, "tool_step")
 
-    def test_checkpoint_prefix_is_detected(self):
-        facts = inspect_request(
-            payload(
-                input_items=[
-                    {
-                        "type": "message",
-                        "role": "user",
-                        "content": "  You are creating a lossy continuation checkpoint for this thread",
-                    }
-                ]
-            )
-        )
+    def test_real_codex_compaction_fixture_is_detected_from_metadata(self):
+        captured = compaction_fixture()
+        identity = resolve_identity(captured["headers"], captured["body"])
+        facts = inspect_request(captured["body"], identity.metadata)
+
         self.assertTrue(facts.is_compaction)
+        self.assertEqual(facts.request_kind, "compaction")
+        self.assertEqual(facts.compaction["strategy"], "memento")
+
+    def test_explicit_turn_metadata_preempts_prompt_fallback(self):
+        captured = compaction_fixture()
+        metadata = {"request_kind": "turn"}
+
+        facts = inspect_request(captured["body"], metadata)
+
+        self.assertFalse(facts.is_compaction)
+
+    def test_real_checkpoint_prefix_is_fallback_without_metadata(self):
+        captured = compaction_fixture()
+        self.assertTrue(inspect_request(captured["body"]).is_compaction)
 
 
 class DecisionTimingTests(unittest.TestCase):
@@ -246,11 +260,10 @@ class DecisionTimingTests(unittest.TestCase):
         self.assertEqual(choose_event(identity, state, inspect_request(payload(turn_id=TURN_2))), "free_reroute")
 
     def test_compaction_preempts_other_events(self):
-        checkpoint = payload(
-            input_items=[{"type": "message", "role": "user", "content": "You are creating a lossy continuation checkpoint now"}]
-        )
-        identity = resolve_identity(headers(), checkpoint)
-        self.assertEqual(choose_event(identity, None, inspect_request(checkpoint)), "compaction")
+        captured = compaction_fixture()
+        identity = resolve_identity(captured["headers"], captured["body"])
+        facts = inspect_request(captured["body"], identity.metadata)
+        self.assertEqual(choose_event(identity, None, facts), "compaction")
 
     def test_same_turn_tool_continuation_never_asks_jev(self):
         tool_payload = payload(input_items=[{"type": "function_call_output", "output": "ok"}])

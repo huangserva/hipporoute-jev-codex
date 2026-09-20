@@ -320,7 +320,7 @@ class RouterEngine:
             if stored is not None and stored.last_context_tokens > 0
             else estimate_context_tokens(body_chars, self.config.chars_per_token)
         )
-        facts = inspect_request(payload)
+        facts = inspect_request(payload, identity.metadata)
         routing_task, delegation_source, parent_tier, delegation = self._routing_context(
             identity,
             facts,

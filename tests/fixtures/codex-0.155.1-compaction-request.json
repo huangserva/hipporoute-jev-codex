@@ -1,0 +1,30 @@
+{
+  "provenance": {
+    "captured_at": "2026-09-20T18:03:00+0800",
+    "codex_version": "0.155.1",
+    "capture_sequence": 10,
+    "sanitization": "Authentication headers, installation IDs, thread IDs, turn IDs, workspace paths, timestamps, tool history, and user content were removed or replaced. The metadata keys, compaction values, and checkpoint prompt are preserved from the captured request."
+  },
+  "headers": {
+    "thread-id": "thread-redacted",
+    "x-codex-turn-metadata": "{\"installation_id\":\"installation-redacted\",\"session_id\":\"thread-redacted\",\"thread_id\":\"thread-redacted\",\"agent_name\":\"/root\",\"turn_id\":\"turn-redacted\",\"window_id\":\"window-redacted\",\"window_number\":0,\"context_window_id\":\"context-window-redacted\",\"request_kind\":\"compaction\",\"root_turn_id\":\"turn-redacted\",\"thread_source\":\"user\",\"sandbox\":\"seatbelt\",\"sandbox_mode\":\"read-only\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"compaction\":{\"trigger\":\"auto\",\"reason\":\"context_limit\",\"implementation\":\"responses\",\"phase\":\"mid_turn\",\"strategy\":\"memento\"}}"
+  },
+  "body": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work.\n"
+          }
+        ]
+      }
+    ],
+    "client_metadata": {
+      "thread_id": "thread-redacted"
+    },
+    "stream": true
+  }
+}

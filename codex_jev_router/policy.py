@@ -15,7 +15,7 @@ SOL = "gpt-5.6-sol"
 ASTRA = "gpt-6-astra"
 TIERS = (LUNA, SOL, ASTRA)
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
-COMPACTION_PREFIX = "You are creating a lossy continuation checkpoint"
+COMPACTION_PREFIX = "You are performing a CONTEXT CHECKPOINT COMPACTION"
 TOOL_OUTPUT_TYPES = ("function_call_output", "custom_tool_call_output")
 TIER_RANK = {LUNA: 0, SOL: 1, ASTRA: 2}
 
@@ -42,6 +42,8 @@ class RequestFacts:
     tool_output_tail: str
     tool_error: bool
     is_compaction: bool
+    request_kind: str | None
+    compaction: dict[str, Any]
     n_items: int
     has_image: bool
     has_tool_history: bool
@@ -225,7 +227,9 @@ def extract_new_task_delegation(payload: Mapping[str, Any]) -> SpawnDelegation |
     return None
 
 
-def inspect_request(payload: Mapping[str, Any]) -> RequestFacts:
+def inspect_request(
+    payload: Mapping[str, Any], metadata: Mapping[str, Any] | None = None
+) -> RequestFacts:
     raw_input = payload.get("input")
     if isinstance(raw_input, str):
         items: list[dict[str, Any]] = []
@@ -258,13 +262,27 @@ def inspect_request(payload: Mapping[str, Any]) -> RequestFacts:
     error_words = ("traceback", "error", "failed", "assertion", "exception", "fatal", "panic")
     has_image = any("input_image" in json.dumps(item, ensure_ascii=False) or "image_url" in item for item in items)
     has_tool_history = any(item.get("type") in TOOL_OUTPUT_TYPES for item in items[-6:])
+    turn_metadata = metadata if isinstance(metadata, Mapping) else {}
+    request_kind = turn_metadata.get("request_kind")
+    request_kind = request_kind if isinstance(request_kind, str) else None
+    compaction = turn_metadata.get("compaction")
+    compaction_details = compaction if isinstance(compaction, dict) else {}
+    has_compaction_metadata = request_kind is not None or "compaction" in turn_metadata
+    if request_kind == "compaction" or bool(compaction):
+        is_compaction = True
+    elif has_compaction_metadata:
+        is_compaction = False
+    else:
+        is_compaction = task.lstrip().startswith(COMPACTION_PREFIX)
     return RequestFacts(
         task=task,
         previous_assistant=previous,
         step_type=step_type,
         tool_output_tail=tool_text[-520:],
         tool_error=any(word in lowered_tool_text for word in error_words),
-        is_compaction=task.lstrip().startswith(COMPACTION_PREFIX),
+        is_compaction=is_compaction,
+        request_kind=request_kind,
+        compaction=compaction_details,
         n_items=len(items),
         has_image=has_image,
         has_tool_history=has_tool_history,

@@ -17,6 +17,13 @@ from codex_jev_router.state import ThreadState, ThreadStateStore
 ROOT = "thread-root"
 TURN_1 = "turn-1"
 TURN_2 = "turn-2"
+FIXTURES = Path(__file__).with_name("fixtures")
+
+
+def compaction_request():
+    with open(FIXTURES / "codex-0.155.1-compaction-request.json", encoding="utf-8") as handle:
+        captured = json.load(handle)
+    return captured["headers"], captured["body"]
 
 
 def request(turn=TURN_1, thread=ROOT, items=None):
@@ -372,18 +379,10 @@ class EngineTests(unittest.TestCase):
             answers=[{"answers": {"tier": {"choice": LUNA, "confidence": 0.9}, "depth": {"choice": "low"}}}]
         )
         engine = self.engine(fake=fake)
-        checkpoint_headers, checkpoint = request(
-            items=[
-                {
-                    "type": "message",
-                    "role": "user",
-                    "content": "You are creating a lossy continuation checkpoint now",
-                }
-            ]
-        )
+        checkpoint_headers, checkpoint = compaction_request()
         compact = engine.decide(checkpoint_headers, checkpoint, len(json.dumps(checkpoint)))
-        engine.record_usage(ROOT, 100_000)
-        next_headers, next_body = request(turn=TURN_2)
+        engine.record_usage("thread-redacted", 100_000)
+        next_headers, next_body = request(turn=TURN_2, thread="thread-redacted")
         rerouted = engine.decide(next_headers, next_body, len(json.dumps(next_body)))
 
         self.assertEqual((compact.model, compact.effort, compact.gate), (SOL, "high", "apply"))
@@ -391,7 +390,7 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(rerouted.event, "free_reroute")
         self.assertEqual((rerouted.model, rerouted.effort), (LUNA, "max"))
         self.assertEqual(len(fake.states), 1)
-        self.assertFalse(self.store.get(ROOT).pending_free_reroute)
+        self.assertFalse(self.store.get("thread-redacted").pending_free_reroute)
 
     def test_new_turn_rejects_large_context_downgrade(self):
         fake = FakeJev(
