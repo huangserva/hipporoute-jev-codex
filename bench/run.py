@@ -350,7 +350,7 @@ def _write_router_config(
     run_dir: Path,
     port: int,
     *,
-    luna_effort: str = "max",
+    luna_effort: str = "low",
     confidence_gate: float = 0.5,
 ) -> None:
     text = f'''[server]

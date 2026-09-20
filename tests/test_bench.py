@@ -146,6 +146,7 @@ class PersistenceTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertIn(f'stream_debug = "{root / "stream.debug"}"', text)
             self.assertIn(f'raw_stream_dir = "{root / "raw-streams"}"', text)
+            self.assertIn('luna_effort = "low"', text)
 
     def test_router_config_accepts_tuning_overrides(self):
         with tempfile.TemporaryDirectory() as tmp:
