@@ -134,7 +134,10 @@ class RouterApp:
 
 
 def build_app(config: RouterConfig, *, key_loader=None, jev_factory=None) -> RouterApp:
-    store = ThreadStateStore(config.state_path)
+    store = ThreadStateStore(
+        config.state_path,
+        flush_interval_seconds=config.state_flush_interval_seconds,
+    )
     engine_kwargs = {}
     if key_loader is not None:
         engine_kwargs["key_loader"] = key_loader
@@ -177,6 +180,12 @@ class RouterHTTPServer(ThreadingHTTPServer):
         if isinstance(sys.exception(), (BrokenPipeError, ConnectionResetError)):
             return
         super().handle_error(request, client_address)
+
+    def server_close(self) -> None:
+        try:
+            self.app.store.close()
+        finally:
+            super().server_close()
 
 
 class RouterHandler(BaseHTTPRequestHandler):

@@ -4,6 +4,7 @@ import socket
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -235,6 +236,15 @@ class ServerTests(unittest.TestCase):
         self.assertIs(health_data["jev_key"], False)
         self.assertEqual(models_data["data"][0]["id"], "auto")
         self.assertEqual(models_data["models"], [])
+
+    def test_server_close_force_closes_state_store(self):
+        store = SimpleNamespace(close=mock.Mock())
+        app = SimpleNamespace(config=self.app.config, store=store)
+        server = make_server(("127.0.0.1", 0), app)
+
+        server.server_close()
+
+        store.close.assert_called_once_with()
 
     def test_invalid_content_length_returns_400(self):
         request = (

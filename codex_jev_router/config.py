@@ -47,6 +47,7 @@ class RouterConfig:
     luna_effort: str
     state_ttl_seconds: int
     state_gc_interval_seconds: int
+    state_flush_interval_seconds: float
     prices: dict[str, Price]
     summary_marker: bool
 
@@ -92,6 +93,7 @@ DEFAULTS: dict[str, Any] = {
         "luna_effort": "low",
         "state_ttl_seconds": 86_400,
         "state_gc_interval_seconds": 300,
+        "state_flush_interval_seconds": 2.0,
         "summary_marker": False,
     },
     "prices": {
@@ -147,6 +149,9 @@ def load_config(path: str | Path | None) -> RouterConfig:
         _value(data, "server", "client_socket_timeout_seconds")
     )
     max_concurrent_requests = int(_value(data, "server", "max_concurrent_requests"))
+    state_flush_interval_seconds = float(
+        _value(data, "routing", "state_flush_interval_seconds")
+    )
     for key, value in (
         ("max_request_body_bytes", max_request_body_bytes),
         ("client_socket_timeout_seconds", client_socket_timeout_seconds),
@@ -154,6 +159,8 @@ def load_config(path: str | Path | None) -> RouterConfig:
     ):
         if value <= 0:
             raise ValueError(f"server.{key} must be positive")
+    if state_flush_interval_seconds <= 0:
+        raise ValueError("routing.state_flush_interval_seconds must be positive")
     return RouterConfig(
         listen_host=str(_value(data, "server", "host")),
         listen_port=int(_value(data, "server", "port")),
@@ -186,6 +193,7 @@ def load_config(path: str | Path | None) -> RouterConfig:
         luna_effort=luna_effort,
         state_ttl_seconds=int(_value(data, "routing", "state_ttl_seconds")),
         state_gc_interval_seconds=int(_value(data, "routing", "state_gc_interval_seconds")),
+        state_flush_interval_seconds=state_flush_interval_seconds,
         prices=prices,
         summary_marker=bool(_value(data, "routing", "summary_marker")),
     )

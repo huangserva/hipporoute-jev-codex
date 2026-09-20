@@ -18,6 +18,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.switch_budget_usd, 0.25)
         self.assertEqual(config.state_ttl_seconds, 86_400)
         self.assertEqual(config.state_gc_interval_seconds, 300)
+        self.assertEqual(config.state_flush_interval_seconds, 2.0)
         self.assertEqual(config.jev_retry_after_cap_seconds, 4.0)
         self.assertEqual(config.jev_circuit_failure_threshold, 3)
         self.assertEqual(config.jev_circuit_open_seconds, 60.0)
@@ -48,6 +49,7 @@ raw_stream_dir = "./raw-streams"
 [routing]
 state_ttl_seconds = 7200
 state_gc_interval_seconds = 60
+state_flush_interval_seconds = 0.5
 luna_effort = "medium"
 """,
                 encoding="utf-8",
@@ -64,6 +66,7 @@ luna_effort = "medium"
         self.assertEqual(config.raw_stream_dir, Path("./raw-streams"))
         self.assertEqual(config.state_ttl_seconds, 7200)
         self.assertEqual(config.state_gc_interval_seconds, 60)
+        self.assertEqual(config.state_flush_interval_seconds, 0.5)
         self.assertEqual(config.luna_effort, "medium")
 
     def test_invalid_luna_effort_is_rejected(self):
@@ -85,6 +88,16 @@ luna_effort = "medium"
                 path.write_text(f"[server]\n{key} = {value}\n", encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, key):
                     load_config(path)
+
+    def test_nonpositive_state_flush_interval_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                "[routing]\nstate_flush_interval_seconds = 0\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "state_flush_interval_seconds"):
+                load_config(path)
 
 
 if __name__ == "__main__":

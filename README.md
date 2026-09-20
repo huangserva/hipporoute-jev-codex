@@ -44,7 +44,7 @@ Luna 默认使用 `effort=low` 和 `service_tier=priority`；这是 T3 机械任
 
 Codex CLI 0.155.1 会把具体委托 payload 以 `encrypted_content` 发给后端，所以边界路由器当前以 `agent_name/task_name` 加已标注的父任务上下文作分档输入，并记 `delegation_source=agent_name_fallback`。代码已预留对未来明文 `NEW_TASK Payload` 和明文 spawn `message` 的优先提取；不尝试解密。
 
-同一 thread id 的决策临界区由 per-thread lock 串行化。状态按 `last_active_at` 做保守 GC，默认 TTL 是 86400 秒、GC 间隔是 300 秒，可在 `[routing]` 的 `state_ttl_seconds` 和 `state_gc_interval_seconds` 修改。
+同一 thread id 的决策临界区由 per-thread lock 串行化。状态按 `last_active_at` 做保守 GC，默认 TTL 是 86400 秒、GC 间隔是 300 秒。状态更新先标脏并留在内存，由后台线程默认每 2 秒合并原子落盘，服务退出时强制刷新；可在 `[routing]` 的 `state_ttl_seconds`、`state_gc_interval_seconds` 和 `state_flush_interval_seconds` 修改。
 
 常驻服务默认限制单请求体为 16 MiB、客户端 socket 空闲 30 秒、同时处理 64 个 POST；可用 `[server] max_request_body_bytes`、`client_socket_timeout_seconds`、`max_concurrent_requests` 调整。并发超限立即返回 503，并以 `gate=server_busy` 写入决策日志。
 

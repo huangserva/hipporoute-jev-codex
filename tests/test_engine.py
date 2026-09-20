@@ -3,6 +3,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -54,7 +55,7 @@ class StateStoreTests(unittest.TestCase):
     def test_state_is_atomically_persisted_and_reloaded(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "threads.json"
-            store = ThreadStateStore(path)
+            store = ThreadStateStore(path, flush_interval_seconds=60)
             store.put(
                 ROOT,
                 ThreadState(
@@ -68,15 +69,93 @@ class StateStoreTests(unittest.TestCase):
                     decided_at="2026-09-19T00:00:00Z",
                 ),
             )
-            reloaded = ThreadStateStore(path).get(ROOT)
+            self.assertFalse(path.exists())
+            store.flush()
+            reloaded_store = ThreadStateStore(path, flush_interval_seconds=60)
+            reloaded = reloaded_store.get(ROOT)
+            store.close()
+            reloaded_store.close()
 
         self.assertEqual(reloaded.model, SOL)
         self.assertEqual(reloaded.last_context_tokens, 1234)
         self.assertTrue(reloaded.pending_free_reroute)
 
+    def test_multiple_updates_are_merged_into_one_explicit_flush(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ThreadStateStore(Path(tmp) / "threads.json", flush_interval_seconds=60)
+            state = ThreadState(
+                model=SOL,
+                effort="high",
+                service_tier="default",
+                last_context_tokens=1,
+                last_turn_id=TURN_1,
+                pending_free_reroute=False,
+                parent_thread_id=None,
+                decided_at="2026-09-19T00:00:00Z",
+            )
+            with mock.patch.object(store, "_write_snapshot", wraps=store._write_snapshot) as write:
+                store.put(ROOT, state)
+                store.update_usage(ROOT, 2)
+                store.touch(ROOT, "2026-09-19T00:00:01Z")
+                self.assertEqual(write.call_count, 0)
+
+                store.flush()
+
+                self.assertEqual(write.call_count, 1)
+            store.close()
+
+    def test_background_worker_flushes_dirty_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "threads.json"
+            store = ThreadStateStore(path, flush_interval_seconds=0.01)
+            store.put(
+                ROOT,
+                ThreadState(
+                    model=SOL,
+                    effort="high",
+                    service_tier="default",
+                    last_context_tokens=1,
+                    last_turn_id=TURN_1,
+                    pending_free_reroute=False,
+                    parent_thread_id=None,
+                    decided_at="2026-09-19T00:00:00Z",
+                ),
+            )
+
+            deadline = time.monotonic() + 1
+            while not path.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            store.close()
+            self.assertTrue(path.exists())
+
+    def test_close_force_flushes_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "threads.json"
+            store = ThreadStateStore(path, flush_interval_seconds=60)
+            store.put(
+                ROOT,
+                ThreadState(
+                    model=SOL,
+                    effort="high",
+                    service_tier="default",
+                    last_context_tokens=7,
+                    last_turn_id=TURN_1,
+                    pending_free_reroute=False,
+                    parent_thread_id=None,
+                    decided_at="2026-09-19T00:00:00Z",
+                ),
+            )
+
+            store.close()
+            store.close()
+
+            payload = json.loads(path.read_text())
+            self.assertEqual(payload["threads"][ROOT]["last_context_tokens"], 7)
+
     def test_gc_removes_only_parseable_expired_states(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = ThreadStateStore(Path(tmp) / "threads.json")
+            store = ThreadStateStore(Path(tmp) / "threads.json", flush_interval_seconds=60)
             base = dict(
                 model=SOL,
                 effort="high",
@@ -116,6 +195,7 @@ class StateStoreTests(unittest.TestCase):
             self.assertIsNone(store.get("expired"))
             self.assertIsNotNone(store.get("active"))
             self.assertIsNotNone(store.get("invalid"))
+            store.close()
 
 
 class EngineTests(unittest.TestCase):
@@ -132,6 +212,7 @@ class EngineTests(unittest.TestCase):
         self.store = ThreadStateStore(self.config.state_path)
 
     def tearDown(self):
+        self.store.close()
         self.tmp.cleanup()
 
     def engine(self, fake=None, key="key", key_counter=None, monotonic=None):

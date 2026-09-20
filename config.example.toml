@@ -40,6 +40,7 @@ chars_per_token = 2.8
 luna_effort = "low"
 state_ttl_seconds = 86400
 state_gc_interval_seconds = 300
+state_flush_interval_seconds = 2
 summary_marker = false
 
 [prices."gpt-6-astra"]
