@@ -325,11 +325,12 @@ class CandidateAndCostTests(unittest.TestCase):
         gate = switch_gate(20_000, ASTRA, SOL, self.prices, 0.25, 20_000)
         self.assertTrue(gate.allowed)
 
-    def test_same_model_effort_change_still_prices_cache_rebuild(self):
+    def test_same_model_effort_change_skips_cache_rebuild_cost(self):
         gate = switch_gate(100_000, SOL, SOL, self.prices, 0.25, 200_000)
-        self.assertFalse(gate.allowed)
+        self.assertTrue(gate.allowed)
+        self.assertEqual(gate.reason, "same_model")
         self.assertAlmostEqual(gate.stay_cost, 0.04)
-        self.assertAlmostEqual(gate.switch_cost, 0.50)
+        self.assertAlmostEqual(gate.switch_cost, 0.04)
 
     def test_character_estimate_uses_configured_divisor(self):
         self.assertEqual(estimate_context_tokens(281, 2.8), 101)

@@ -338,10 +338,13 @@ def switch_gate(
         return SwitchGate(False, "unknown_model", None, None)
     if current_model not in prices or target_model not in prices:
         return SwitchGate(False, "missing_price", None, None)
-    if TIER_RANK[target_model] < TIER_RANK[current_model] and context_tokens > downgrade_max_context_tokens:
-        return SwitchGate(False, "downgrade_context_limit", 0.0, 0.0)
     token_factor = Decimal(context_tokens) / Decimal(1_000_000)
     stay_decimal = token_factor * Decimal(str(prices[current_model].cache_read))
+    if current_model == target_model:
+        same_model_cost = float(stay_decimal)
+        return SwitchGate(True, "same_model", same_model_cost, same_model_cost)
+    if TIER_RANK[target_model] < TIER_RANK[current_model] and context_tokens > downgrade_max_context_tokens:
+        return SwitchGate(False, "downgrade_context_limit", 0.0, 0.0)
     switch_decimal = token_factor * Decimal(str(prices[target_model].cache_write))
     allowed = switch_decimal - stay_decimal <= Decimal(str(budget_usd))
     stay_cost = float(stay_decimal)
