@@ -52,22 +52,54 @@ def _read_chunked(stream, *, max_bytes: int) -> bytes:
         chunks.append(chunk)
 
 
+def _read_upstream_chunk(response, size: int = 65536) -> bytes:
+    return response.read1(size) if hasattr(response, "read1") else response.read(size)
+
+
+def _sniff_sse_prefix(response, *, limit: int = 64) -> tuple[bool, list[bytes]]:
+    """Read enough leading bytes to classify SSE without losing read boundaries."""
+
+    chunks: list[bytes] = []
+    probe = b""
+    prefixes = (b"event:", b"data:")
+    while len(probe) < limit:
+        chunk = _read_upstream_chunk(response, limit - len(probe))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        probe += chunk
+        head = probe.lstrip()
+        if any(head.startswith(prefix) for prefix in prefixes):
+            return True, chunks
+        if not head or any(prefix.startswith(head) for prefix in prefixes):
+            continue
+        return False, chunks
+    return False, chunks
+
+
 def relay_sse_response(
     response,
     writer,
     tracker: SSEUsageTracker,
     capture: RawStreamCapture,
     *,
-    first_chunk: bytes = b"",
+    first_chunks: tuple[bytes, ...] = (),
 ) -> bool:
     """Relay SSE chunks, draining upstream for accounting after a client disconnect."""
 
     downstream_connected = True
-    chunk = first_chunk
+    pending = iter(first_chunks)
+    chunk = b""
     while True:
         if not chunk:
             try:
-                chunk = response.read1(65536) if hasattr(response, "read1") else response.read(65536)
+                chunk = next(pending)
+            except StopIteration:
+                try:
+                    chunk = _read_upstream_chunk(response)
+                except Exception as exc:
+                    capture.event("upstream_error", error=type(exc).__name__)
+                    raise
             except Exception as exc:
                 capture.event("upstream_error", error=type(exc).__name__)
                 raise
@@ -441,17 +473,11 @@ class RouterHandler(BaseHTTPRequestHandler):
             connection, response = self.server.app.upstream.open_response(payload, request_headers, path)
             status = response.status
             upstream_content_type = (response.getheader("Content-Type") or "").strip()
-            first_chunk = b""
+            first_chunks: list[bytes] = []
             if "text/event-stream" in upstream_content_type.lower():
                 is_sse = True
             elif status == 200 and not upstream_content_type:
-                first_chunk = (
-                    response.read1(65536)
-                    if hasattr(response, "read1")
-                    else response.read(65536)
-                )
-                head = first_chunk[:64].lstrip()
-                is_sse = head.startswith(b"event:") or head.startswith(b"data:")
+                is_sse, first_chunks = _sniff_sse_prefix(response)
             else:
                 is_sse = False
             if is_sse and stream_requested:
@@ -470,7 +496,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                     self.wfile,
                     tracker,
                     capture,
-                    first_chunk=first_chunk,
+                    first_chunks=tuple(first_chunks),
                 )
                 finish_record()
                 if downstream_connected:
@@ -482,8 +508,8 @@ class RouterHandler(BaseHTTPRequestHandler):
             else:
                 out_kind = "json"
                 remainder = response.read()
-                data = first_chunk + remainder
-                if first_chunk:
+                data = b"".join(first_chunks) + remainder
+                for first_chunk in first_chunks:
                     capture.chunk(first_chunk)
                     tracker.feed(first_chunk)
                 if remainder:

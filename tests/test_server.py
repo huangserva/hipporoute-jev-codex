@@ -362,6 +362,35 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(record["out"], "json")
         self.assertEqual(record["upstream_content_type"], "")
 
+    def test_sse_sniff_handles_prefix_split_across_read_chunks(self):
+        class Response:
+            status = 200
+
+            def __init__(self):
+                self.chunks = iter((b"eve", b"nt:" + SSE_BYTES[6:], b""))
+
+            def getheader(self, _name):
+                return None
+
+            def getheaders(self):
+                return []
+
+            def read1(self, _size):
+                return next(self.chunks)
+
+            def read(self):
+                return b"".join(self.chunks)
+
+        self.app.upstream = SimpleNamespace(
+            open_response=lambda *_args: (SimpleNamespace(close=lambda: None), Response())
+        )
+
+        status, headers, data = self.post(True, thread_id="split-sse-prefix")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/event-stream; charset=utf-8")
+        self.assertEqual(data, SSE_BYTES)
+
     def test_midstream_incomplete_read_never_writes_second_http_response(self):
         self.app.config.stream_debug_path.touch()
         self.app.upstream = SimpleNamespace(
