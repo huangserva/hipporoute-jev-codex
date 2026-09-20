@@ -80,5 +80,49 @@ class ConfigureCodexTests(unittest.TestCase):
             self.assertEqual(json.loads(state.read_text())["backup_path"], result["backup_path"])
 
 
+class ServiceScriptTests(unittest.TestCase):
+    def _script(self, name: str) -> str:
+        return (ROOT / "scripts" / name).read_text(encoding="utf-8")
+
+    def test_install_service_contains_required_launchd_contract(self):
+        script = self._script("install-service.sh")
+        for required in (
+            "com.jev.codex-jev-router",
+            "<key>RunAtLoad</key><true/>",
+            "<key>KeepAlive</key><true/>",
+            "codex-jev-router.out.log",
+            "codex-jev-router.err.log",
+            "HTTPS_PROXY",
+            "http://127.0.0.1:7897",
+            "NO_PROXY",
+            '"jev_key":true',
+        ):
+            self.assertIn(required, script)
+        self.assertNotIn("TYPESAFE_API_KEY", script)
+
+    def test_enable_checks_health_and_enables_shadow_before_config(self):
+        script = self._script("enable.sh")
+        health = script.index("check_health")
+        shadow = script.index('touch "$SHADOW_PATH"')
+        configure = script.index("configure_codex.py\" enable")
+        self.assertLess(health, shadow)
+        self.assertLess(shadow, configure)
+        self.assertIn("install-service.sh", script)
+
+    def test_disable_restores_then_removes_shadow_and_optionally_stops(self):
+        script = self._script("disable.sh")
+        restore = script.index("configure_codex.py\" restore")
+        remove_shadow = script.index('rm -f "$SHADOW_PATH"')
+        self.assertLess(restore, remove_shadow)
+        self.assertIn("--stop-service", script)
+        self.assertIn("launchctl bootout", script)
+
+    def test_watchdog_only_restarts_unhealthy_service(self):
+        script = self._script("watchdog.sh")
+        self.assertIn("/health", script)
+        self.assertIn("launchctl kickstart -k", script)
+        self.assertNotIn("TYPESAFE_API_KEY", script)
+
+
 if __name__ == "__main__":
     unittest.main()
