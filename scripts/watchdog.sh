@@ -4,7 +4,26 @@ set -euo pipefail
 
 LABEL="com.jev.codex-jev-router"
 HEALTH_URL="http://127.0.0.1:4319/health"
-if curl --noproxy 127.0.0.1 -fsS --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+LOG="$HOME/Library/Logs/codex-jev-router.watchdog.log"
+healthy() {
+  curl --noproxy 127.0.0.1 -fsS --max-time 3 "$HEALTH_URL" >/dev/null 2>&1
+}
+if healthy; then
   exit 0
 fi
-launchctl kickstart -k "gui/$(id -u)/$LABEL"
+print "[$(date '+%Y-%m-%dT%H:%M:%S%z')] unhealthy; restarting" >> "$LOG"
+launchctl kickstart -k "gui/$(id -u)/$LABEL" 2>>"$LOG" || true
+sleep 2
+if healthy; then
+  exit 0
+fi
+
+# Fallback for a machine where the user launchd domain is unavailable.
+cd "$REPO"
+HTTPS_PROXY=http://127.0.0.1:7897 \
+HTTP_PROXY=http://127.0.0.1:7897 \
+NO_PROXY=127.0.0.1,localhost \
+nohup python3 -m codex_jev_router >> "$LOG" 2>&1 &
+sleep 2
+healthy

@@ -121,6 +121,8 @@ class ServiceScriptTests(unittest.TestCase):
         script = self._script("watchdog.sh")
         self.assertIn("/health", script)
         self.assertIn("launchctl kickstart -k", script)
+        self.assertIn("nohup", script)
+        self.assertIn("HTTPS_PROXY=http://127.0.0.1:7897", script)
         self.assertNotIn("TYPESAFE_API_KEY", script)
 
 
