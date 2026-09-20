@@ -206,3 +206,9 @@ python3 bench/run_subagent.py --repeats 3 --run-id subagent-full-YYYYMMDD
 ```
 
 2026-09-20 的 24 个有效会话全部通过；已完成 SSE 的子 agent 费用降低 83.90%，父子合计降低 79.74%，但 live 墙钟高 21.55% 且缺 completed 数更多，必须按单次受控样本解读。详见 `docs/2026-09-20-子agent分档基准.md`。
+
+## T1/T2 后续验证
+
+T2 用 debug 哨兵下的原始上游 chunk 捕获定位了历史 completed 缺失：Codex 客户端提前断开后，路由器过早关闭上游。现在下游断开后会继续排空上游以取得 completed/usage；同任务 6 次、127 请求缺失为 0。详见 `docs/2026-09-20-T2-缺completed排查.md`。
+
+T1 用 `bench/run_long_parent.py` 运行 30k/80k/150k 父上下文 × shadow_all/live_all/live_none × 3 遍。27/27 会话通过；`fork_turns=all` 的子首请求约 22k，未随父上下文增长，所测档位没有出现 live_all 费用不如 shadow 的交叉点。`fork_turns=none` 将子首请求降到约 16.9k，但总费用没有稳定优势，因此当前不建议全局强制 none。详见 `docs/2026-09-20-T1-长父线程fanout.md`。

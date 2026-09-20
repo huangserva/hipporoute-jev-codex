@@ -91,4 +91,6 @@ start → chunk... → client_disconnect → chunk... → upstream_eof → end(t
 - 如果未来真正发生上游断流或没有 completed，仍会如实记 `upstream_error`/`upstream_eof + end(false)`，不会伪造 usage。
 - 本次证据针对 Codex CLI 0.155.1、ChatGPT Codex 直连上游和本机 HTTPS 代理环境。
 
+后续 T1 的 1,466 个有效请求中又出现 1 条 HTTP 200 但无 completed 的流。T1 未开 raw debug，因此该单条无法在上游 EOF 和 read 异常之间分类；它已在 T1 报告中标为费用下界。所以 T2 修复的精确声明是“消除客户端断开导致的系统性缺失，同任务 6 次验证为零”，而不是“任何上游流永远不会缺 completed”。
+
 运行后已删 debug/shadow/off 哨兵，停止 4320 路由器，`~/.codex/config.toml` SHA-256 恢复为 `<redacted-sha256>`。
