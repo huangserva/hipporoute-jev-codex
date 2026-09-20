@@ -13,6 +13,7 @@
 - 调用方请求非流式时，用 `response.completed` 组装 JSON
 - 支持 chunked 请求和 chunked SSE 响应
 - 线程状态原子落盘，决策日志以权限 `0600` 的 JSONL 写入
+- debug 哨兵开启时，每条上游流按原始 chunk 与时间戳写入独立 0600 JSONL
 - 直连 ChatGPT Codex 后端，或经 Codex Router caller edge 使用共享登录态
 - 遵守系统 `HTTPS_PROXY`；不需要也不读取 OpenAI API key
 
@@ -147,9 +148,13 @@ touch ~/.codex/codex-jev-router/router.off
 # shadow：照常决策和记录 would，但实际走 astra@medium
 touch ~/.codex/codex-jev-router/router.shadow
 
+# 上游原始流调试：仅排查时开启，文件默认写入 raw-streams/
+touch ~/.codex/codex-jev-router/stream.debug
+
 # 恢复
 rm ~/.codex/codex-jev-router/router.off
 rm ~/.codex/codex-jev-router/router.shadow
+rm ~/.codex/codex-jev-router/stream.debug
 ```
 
 线程状态默认在 `~/.codex/codex-jev-router/threads.json`，决策日志默认在 `~/.codex/codex-jev-router/decisions.jsonl`。日志不保存完整请求正文和认证 header；`task` 仅保留最多 160 字符的脱敏预览。字段包括线程/轮次/父线程、事件、`apply/hold/sticky` 关卡、原因、shadow/would、Jev 耗时、实际路由、SSE completed model、usage 与总耗时。示例：

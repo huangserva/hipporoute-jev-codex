@@ -13,6 +13,7 @@
 - 实现 Codex Router caller edge 与 ChatGPT Codex 直连两种上游；HTTPS 直连遵守环境代理。
 - 完成子 agent 委托提取、独立 Jev 上下文和父子链日志；子线程不无条件继承父模型。
 - 完成 per-thread 决策锁和默认 24 小时状态 TTL/保守 GC。
+- 完成 T2 原始上游流捕获和缺 completed 根因修复；客户端断开后继续排空上游，同任务 6 次、127 请求缺失率为 0。
 - 完成 76 项离线单元测试，覆盖委托提取、子线程独立决策、同线程并发只决策一次和 GC。
 - 用真实 Jev key 完成 shadow 与真路由对照；`response.completed.model` 证明 luna/astra 实际切换，详见 `docs/2026-09-19-真实Jev端到端.md`。
 - 增加可重复的 8 任务机械/推理基准驱动；48 个正式新会话全部通过，机械组费用降低 95.36%，全任务费用降低 44.75%，详见 `docs/2026-09-19-机械任务基准.md`。
@@ -32,7 +33,7 @@
 
 - Codex 的私有 header 和 `x-codex-turn-metadata` 不是稳定公开协议；升级 Codex CLI 后应重跑线程标识与子 agent fixture 验证。
 - Codex CLI 0.155.1 在子线程 `NEW_TASK` 和父线程 `spawn_agent` arguments 中都将具体委托 payload 加密；当前只能以 agent name 加父任务上下文分档，无语义名称会降低准确性。
-- fan-out 基准中 live 有 18 条父线程流缺 `response.completed`，子线程为 0；没有 usage 的流无法计价，导致 live 费用下界比 shadow 更低估。
+- 历史 fan-out 基准中 live 的 18 条缺 `response.completed` 已定位为客户端断开后路由器过早关上游；修复后验证缺失率为 0，但历史报告的费用仍应按下界解读。
 - 直连模式会把 Codex 登录态认证 header 转发给 `chatgpt.com`，仅适合本机回环开发；不得把监听地址改为外网接口。
 - `/v1/models` 为兼容 Codex CLI 0.155.1 返回双结构；未来 CLI 目录协议改变时需要适配。
 - 字符估算只是 usage 缺失时的兜底，中文/工具 schema 很大时误差可能显著。
@@ -44,4 +45,4 @@
 3. 与 Codex 协议层协作，让边界获得可控、脱敏的明文委托摘要；在此之前保留 `agent_name_fallback` 的可观测警告。
 4. 为 per-thread lock 增加长时运行压力测试，为状态落盘增加崩溃恢复验收。
 5. 在安装了 Codex Router 的机器上做 caller edge 真实验收，验证 caller secret、shared session、目录刷新和服务托管。
-6. 查明父线程缺 `response.completed` 的原因，必要时为未完成流建立可审计的 usage 估算上界，再做更大规模 shadow/live 测量。
+6. 在更长时间的真实流量中继续监测 `upstream_error` 和真正的 `upstream_eof + end(false)`，防止上游协议变化。
