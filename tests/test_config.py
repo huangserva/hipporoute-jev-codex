@@ -15,6 +15,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.switch_budget_usd, 0.25)
         self.assertEqual(config.state_ttl_seconds, 86_400)
         self.assertEqual(config.state_gc_interval_seconds, 300)
+        self.assertEqual(config.stream_debug_path, Path.home() / ".codex/codex-jev-router/stream.debug")
+        self.assertEqual(config.raw_stream_dir, Path.home() / ".codex/codex-jev-router/raw-streams")
         self.assertEqual(config.prices[ASTRA].cache_write, 12.50)
         self.assertEqual(config.prices[SOL].cache_read, 0.40)
         self.assertEqual(config.prices[LUNA].cache_write, 0.25)
@@ -31,6 +33,8 @@ mode = "caller_edge"
 caller_edge_url = "http://127.0.0.1:4202"
 [paths]
 state = "./state.json"
+stream_debug = "./stream.debug"
+raw_stream_dir = "./raw-streams"
 [routing]
 state_ttl_seconds = 7200
 state_gc_interval_seconds = 60
@@ -42,6 +46,8 @@ state_gc_interval_seconds = 60
         self.assertEqual(config.listen_port, 9999)
         self.assertEqual(config.upstream_mode, "caller_edge")
         self.assertEqual(config.state_path, Path("./state.json"))
+        self.assertEqual(config.stream_debug_path, Path("./stream.debug"))
+        self.assertEqual(config.raw_stream_dir, Path("./raw-streams"))
         self.assertEqual(config.state_ttl_seconds, 7200)
         self.assertEqual(config.state_gc_interval_seconds, 60)
 

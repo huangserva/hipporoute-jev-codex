@@ -83,6 +83,8 @@ class ServerTests(unittest.TestCase):
             decision_log_path=root / "decisions.jsonl",
             off_path=root / "router.off",
             shadow_path=root / "router.shadow",
+            stream_debug_path=root / "stream.debug",
+            raw_stream_dir=root / "raw-streams",
         )
         self.app = build_app(config, key_loader=lambda: "")
         self.server = make_server(("127.0.0.1", 0), self.app)
@@ -171,6 +173,23 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(record["response_completed"])
         self.assertIsNone(record["jev"])
         self.assertNotIn("authorization", json.dumps(record).lower())
+
+    def test_debug_sentinel_captures_exact_upstream_chunks_and_links_log(self):
+        self.app.config.stream_debug_path.touch()
+
+        self.post(True)
+
+        files = list(self.app.config.raw_stream_dir.glob("*.jsonl"))
+        self.assertEqual(len(files), 1)
+        rows = [json.loads(line) for line in files[0].read_text().splitlines()]
+        captured = b"".join(
+            __import__("base64").b64decode(row["data_base64"])
+            for row in rows
+            if row["event"] == "chunk"
+        )
+        self.assertEqual(captured, SSE_BYTES)
+        record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
+        self.assertEqual(record["stream_capture"], files[0].name)
 
     def test_subagent_log_contains_parent_chain_and_routing_source(self):
         self.post(True, "Coordinate a hard task", thread_id="parent")

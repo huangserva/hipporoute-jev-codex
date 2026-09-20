@@ -8,6 +8,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,6 +20,7 @@ from .engine import Decision, RouterEngine
 from .policy import inspect_request
 from .state import ThreadStateStore
 from .sse import SSEUsageTracker, assemble_sse
+from .stream_debug import RawStreamCapture
 from .upstream import HOP_BY_HOP, UpstreamClient
 
 
@@ -205,6 +207,7 @@ class RouterHandler(BaseHTTPRequestHandler):
             return self._json(400, {"error": {"message": "JSON object expected"}})
 
         started = time.monotonic()
+        request_id = str(uuid.uuid4())
         request_headers = list(self.headers.raw_items())
         decision = self.server.app.engine.decide(dict(request_headers), payload, len(raw.decode("utf-8", "replace")))
         stream_requested = payload.get("stream") is True
@@ -225,6 +228,12 @@ class RouterHandler(BaseHTTPRequestHandler):
                 decision.identity.thread_id,
                 [delegation],
             )
+        )
+        capture = RawStreamCapture.start(
+            sentinel=self.server.app.config.stream_debug_path,
+            directory=self.server.app.config.raw_stream_dir,
+            request_id=request_id,
+            thread_id=decision.identity.thread_id,
         )
         recorded = False
 
@@ -268,6 +277,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                     "task": text_preview(decision.routing_task),
                     "routing_task": text_preview(decision.routing_task),
                     "total_ms": int((time.monotonic() - started) * 1000),
+                    "stream_capture": capture.relative_name,
                 }
             )
             recorded = True
@@ -288,20 +298,32 @@ class RouterHandler(BaseHTTPRequestHandler):
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
                 while True:
-                    chunk = response.read1(65536) if hasattr(response, "read1") else response.read(65536)
+                    try:
+                        chunk = response.read1(65536) if hasattr(response, "read1") else response.read(65536)
+                    except Exception as exc:
+                        capture.event("upstream_error", error=type(exc).__name__)
+                        raise
                     if not chunk:
+                        capture.event("upstream_eof")
                         break
+                    capture.chunk(chunk)
                     tracker.feed(chunk)
-                    self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
-                    self.wfile.write(chunk)
-                    self.wfile.write(b"\r\n")
-                    self.wfile.flush()
+                    try:
+                        self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+                        self.wfile.write(chunk)
+                        self.wfile.write(b"\r\n")
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError) as exc:
+                        capture.event("client_disconnect", error=type(exc).__name__)
+                        raise
                 finish_record()
                 self.wfile.write(b"0\r\n\r\n")
                 self.wfile.flush()
             else:
                 out_kind = "json"
                 data = response.read()
+                capture.chunk(data)
+                capture.event("upstream_eof")
                 tracker.feed(data)
                 output_content_type = upstream_content_type or "application/json"
                 head = data[:64].lstrip()
@@ -320,6 +342,7 @@ class RouterHandler(BaseHTTPRequestHandler):
             if connection is not None:
                 connection.close()
             finish_record()
+            capture.close(response_completed=tracker.response_completed)
 
 
 def make_server(address, app: RouterApp) -> RouterHTTPServer:

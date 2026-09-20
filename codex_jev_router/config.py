@@ -27,6 +27,8 @@ class RouterConfig:
     decision_log_path: Path
     off_path: Path
     shadow_path: Path
+    stream_debug_path: Path
+    raw_stream_dir: Path
     jev_url: str
     jev_model: str
     jev_timeout_seconds: float
@@ -56,6 +58,8 @@ DEFAULTS: dict[str, Any] = {
         "decision_log": str(DEFAULT_STATE_DIR / "decisions.jsonl"),
         "off": str(DEFAULT_STATE_DIR / "router.off"),
         "shadow": str(DEFAULT_STATE_DIR / "router.shadow"),
+        "stream_debug": str(DEFAULT_STATE_DIR / "stream.debug"),
+        "raw_stream_dir": str(DEFAULT_STATE_DIR / "raw-streams"),
     },
     "jev": {
         "url": "https://api.typesafe.ai/v1/systemone",
@@ -130,6 +134,8 @@ def load_config(path: str | Path | None) -> RouterConfig:
         decision_log_path=_path(_value(data, "paths", "decision_log")),
         off_path=_path(_value(data, "paths", "off")),
         shadow_path=_path(_value(data, "paths", "shadow")),
+        stream_debug_path=_path(_value(data, "paths", "stream_debug")),
+        raw_stream_dir=_path(_value(data, "paths", "raw_stream_dir")),
         jev_url=str(_value(data, "jev", "url")),
         jev_model=str(_value(data, "jev", "model")),
         jev_timeout_seconds=float(_value(data, "jev", "timeout_seconds")),

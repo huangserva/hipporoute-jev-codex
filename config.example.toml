@@ -16,6 +16,8 @@ state = "~/.codex/codex-jev-router/threads.json"
 decision_log = "~/.codex/codex-jev-router/decisions.jsonl"
 off = "~/.codex/codex-jev-router/router.off"
 shadow = "~/.codex/codex-jev-router/router.shadow"
+stream_debug = "~/.codex/codex-jev-router/stream.debug"
+raw_stream_dir = "~/.codex/codex-jev-router/raw-streams"
 
 [jev]
 url = "https://api.typesafe.ai/v1/systemone"
