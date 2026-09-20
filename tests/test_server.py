@@ -206,8 +206,7 @@ class ServerTests(unittest.TestCase):
             status = 200
 
             def __init__(self):
-                self.data = data
-                self.chunks = iter((data, b""))
+                self.stream = BytesIO(data)
 
             def getheader(self, _name):
                 return None
@@ -216,10 +215,10 @@ class ServerTests(unittest.TestCase):
                 return []
 
             def read1(self, _size):
-                return next(self.chunks)
+                return self.stream.read(_size)
 
             def read(self):
-                return self.data
+                return self.stream.read()
 
         return Connection(), Response()
 
@@ -335,6 +334,23 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(forwarded["stream"])
         self.assertEqual(forwarded["model"], "gpt-6-astra")
         self.assertEqual(forwarded["reasoning"]["effort"], "medium")
+
+    def test_stream_client_gets_json_when_200_without_content_type_is_json(self):
+        upstream_json = json.dumps(
+            {"error": {"message": "upstream returned JSON"}}, separators=(",", ":")
+        ).encode()
+        self.app.upstream = SimpleNamespace(
+            open_response=lambda *_args: self.response_with_bytes(upstream_json)
+        )
+
+        status, headers, data = self.post(True, thread_id="json-sniff")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "application/json")
+        self.assertEqual(data, upstream_json)
+        record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
+        self.assertEqual(record["out"], "json")
+        self.assertEqual(record["upstream_content_type"], "")
 
     def test_midstream_incomplete_read_never_writes_second_http_response(self):
         self.app.config.stream_debug_path.touch()

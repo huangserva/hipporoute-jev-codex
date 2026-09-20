@@ -52,22 +52,32 @@ def _read_chunked(stream, *, max_bytes: int) -> bytes:
         chunks.append(chunk)
 
 
-def relay_sse_response(response, writer, tracker: SSEUsageTracker, capture: RawStreamCapture) -> bool:
+def relay_sse_response(
+    response,
+    writer,
+    tracker: SSEUsageTracker,
+    capture: RawStreamCapture,
+    *,
+    first_chunk: bytes = b"",
+) -> bool:
     """Relay SSE chunks, draining upstream for accounting after a client disconnect."""
 
     downstream_connected = True
+    chunk = first_chunk
     while True:
-        try:
-            chunk = response.read1(65536) if hasattr(response, "read1") else response.read(65536)
-        except Exception as exc:
-            capture.event("upstream_error", error=type(exc).__name__)
-            raise
+        if not chunk:
+            try:
+                chunk = response.read1(65536) if hasattr(response, "read1") else response.read(65536)
+            except Exception as exc:
+                capture.event("upstream_error", error=type(exc).__name__)
+                raise
         if not chunk:
             capture.event("upstream_eof")
             break
         capture.chunk(chunk)
         tracker.feed(chunk)
         if not downstream_connected:
+            chunk = b""
             continue
         try:
             writer.write(f"{len(chunk):X}\r\n".encode("ascii"))
@@ -77,6 +87,7 @@ def relay_sse_response(response, writer, tracker: SSEUsageTracker, capture: RawS
         except (BrokenPipeError, ConnectionResetError) as exc:
             capture.event("client_disconnect", error=type(exc).__name__)
             downstream_connected = False
+        chunk = b""
     return downstream_connected
 
 
@@ -421,7 +432,19 @@ class RouterHandler(BaseHTTPRequestHandler):
             connection, response = self.server.app.upstream.open_response(payload, request_headers, path)
             status = response.status
             upstream_content_type = (response.getheader("Content-Type") or "").strip()
-            is_sse = "text/event-stream" in upstream_content_type or status == 200
+            first_chunk = b""
+            if "text/event-stream" in upstream_content_type.lower():
+                is_sse = True
+            elif status == 200 and not upstream_content_type:
+                first_chunk = (
+                    response.read1(65536)
+                    if hasattr(response, "read1")
+                    else response.read(65536)
+                )
+                head = first_chunk[:64].lstrip()
+                is_sse = head.startswith(b"event:") or head.startswith(b"data:")
+            else:
+                is_sse = False
             if is_sse and stream_requested:
                 out_kind = "sse"
                 self.send_response(status)
@@ -433,7 +456,13 @@ class RouterHandler(BaseHTTPRequestHandler):
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
                 self._headers_sent = True
-                downstream_connected = relay_sse_response(response, self.wfile, tracker, capture)
+                downstream_connected = relay_sse_response(
+                    response,
+                    self.wfile,
+                    tracker,
+                    capture,
+                    first_chunk=first_chunk,
+                )
                 finish_record()
                 if downstream_connected:
                     try:
@@ -443,10 +472,15 @@ class RouterHandler(BaseHTTPRequestHandler):
                         capture.event("client_disconnect", error=type(exc).__name__)
             else:
                 out_kind = "json"
-                data = response.read()
-                capture.chunk(data)
+                remainder = response.read()
+                data = first_chunk + remainder
+                if first_chunk:
+                    capture.chunk(first_chunk)
+                    tracker.feed(first_chunk)
+                if remainder:
+                    capture.chunk(remainder)
+                    tracker.feed(remainder)
                 capture.event("upstream_eof")
-                tracker.feed(data)
                 output_content_type = upstream_content_type or "application/json"
                 head = data[:64].lstrip()
                 if status == 200 and (head.startswith(b"event:") or head.startswith(b"data:")):
