@@ -41,6 +41,34 @@ def _read_chunked(stream) -> bytes:
         chunks.append(chunk)
 
 
+def relay_sse_response(response, writer, tracker: SSEUsageTracker, capture: RawStreamCapture) -> bool:
+    """Relay SSE chunks, draining upstream for accounting after a client disconnect."""
+
+    downstream_connected = True
+    while True:
+        try:
+            chunk = response.read1(65536) if hasattr(response, "read1") else response.read(65536)
+        except Exception as exc:
+            capture.event("upstream_error", error=type(exc).__name__)
+            raise
+        if not chunk:
+            capture.event("upstream_eof")
+            break
+        capture.chunk(chunk)
+        tracker.feed(chunk)
+        if not downstream_connected:
+            continue
+        try:
+            writer.write(f"{len(chunk):X}\r\n".encode("ascii"))
+            writer.write(chunk)
+            writer.write(b"\r\n")
+            writer.flush()
+        except (BrokenPipeError, ConnectionResetError) as exc:
+            capture.event("client_disconnect", error=type(exc).__name__)
+            downstream_connected = False
+    return downstream_connected
+
+
 class DecisionLogger:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
@@ -297,28 +325,14 @@ class RouterHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
-                while True:
+                downstream_connected = relay_sse_response(response, self.wfile, tracker, capture)
+                finish_record()
+                if downstream_connected:
                     try:
-                        chunk = response.read1(65536) if hasattr(response, "read1") else response.read(65536)
-                    except Exception as exc:
-                        capture.event("upstream_error", error=type(exc).__name__)
-                        raise
-                    if not chunk:
-                        capture.event("upstream_eof")
-                        break
-                    capture.chunk(chunk)
-                    tracker.feed(chunk)
-                    try:
-                        self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
-                        self.wfile.write(chunk)
-                        self.wfile.write(b"\r\n")
+                        self.wfile.write(b"0\r\n\r\n")
                         self.wfile.flush()
                     except (BrokenPipeError, ConnectionResetError) as exc:
                         capture.event("client_disconnect", error=type(exc).__name__)
-                        raise
-                finish_record()
-                self.wfile.write(b"0\r\n\r\n")
-                self.wfile.flush()
             else:
                 out_kind = "json"
                 data = response.read()

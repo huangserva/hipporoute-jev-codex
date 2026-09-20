@@ -9,6 +9,9 @@ from pathlib import Path
 
 from codex_jev_router.config import load_config
 from codex_jev_router.server import build_app, make_server
+from codex_jev_router.server import relay_sse_response
+from codex_jev_router.sse import SSEUsageTracker
+from codex_jev_router.stream_debug import RawStreamCapture
 
 
 OUTPUT_ITEM = {
@@ -190,6 +193,46 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(captured, SSE_BYTES)
         record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
         self.assertEqual(record["stream_capture"], files[0].name)
+
+    def test_downstream_disconnect_still_drains_upstream_through_completed(self):
+        class Response:
+            def __init__(self):
+                self.chunks = iter((SSE_BYTES[:83], SSE_BYTES[83:], b""))
+
+            def read1(self, _size):
+                return next(self.chunks)
+
+        class DisconnectedWriter:
+            def write(self, _data):
+                raise BrokenPipeError("client left")
+
+            def flush(self):
+                raise AssertionError("flush must not run after failed write")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sentinel = root / "stream.debug"
+            sentinel.touch()
+            capture = RawStreamCapture.start(
+                sentinel=sentinel,
+                directory=root / "raw",
+                request_id="request-1",
+                thread_id="thread-1",
+            )
+            tracker = SSEUsageTracker()
+
+            downstream_connected = relay_sse_response(
+                Response(), DisconnectedWriter(), tracker, capture
+            )
+            tracker.finish()
+            capture.close(response_completed=tracker.response_completed)
+
+            self.assertFalse(downstream_connected)
+            self.assertTrue(tracker.response_completed)
+            self.assertEqual(tracker.usage.input_tokens, 4321)
+            rows = [json.loads(line) for line in next((root / "raw").glob("*.jsonl")).read_text().splitlines()]
+            events = [row["event"] for row in rows if row["event"] != "chunk"]
+            self.assertEqual(events, ["start", "client_disconnect", "upstream_eof", "end"])
 
     def test_subagent_log_contains_parent_chain_and_routing_source(self):
         self.post(True, "Coordinate a hard task", thread_id="parent")
