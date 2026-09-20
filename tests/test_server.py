@@ -314,12 +314,13 @@ class ServerTests(unittest.TestCase):
                 self.assertTrue(self.server.request_slots.acquire(blocking=False))
                 acquired.append(True)
 
-            status, _headers, data = self.post(True, thread_id="overloaded")
+            status, headers, data = self.post(True, thread_id="overloaded")
         finally:
             for _ in acquired:
                 self.server.request_slots.release()
 
         self.assertEqual(status, 503)
+        self.assertEqual(headers["Connection"], "close")
         self.assertIn("server busy", json.loads(data)["error"]["message"])
         record = json.loads(self.app.config.decision_log_path.read_text().splitlines()[-1])
         self.assertEqual((record["event"], record["gate"], record["status"]), (

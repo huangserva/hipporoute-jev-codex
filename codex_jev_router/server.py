@@ -231,11 +231,15 @@ class RouterHandler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
 
-    def _json(self, status: int, payload: dict[str, Any]) -> None:
+    def _json(self, status: int, payload: dict[str, Any], *, close: bool = False) -> None:
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if close:
+            self.close_connection = True
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        if close:
+            self.send_header("Connection", "close")
         self.end_headers()
         self._headers_sent = True
         self.wfile.write(body)
@@ -276,7 +280,7 @@ class RouterHandler(BaseHTTPRequestHandler):
         self._active_capture = None
         if not self.server.request_slots.acquire(blocking=False):
             self._log_rejection("server_busy", 503)
-            self._json(503, {"error": {"message": "server busy"}})
+            self._json(503, {"error": {"message": "server busy"}}, close=True)
             return
         try:
             self._post()
