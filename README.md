@@ -35,10 +35,10 @@
 |---|---|
 | `first_request` | 调 Jev，钉住线程 |
 | `new_user_turn` | 调 Jev，再过切换成本与降级上下文关卡 |
-| `compaction` | 本次强制 `gpt-5.6-sol@high`，下一轮免费重选 |
+| `compaction` | 本次强制 `gpt-5.6-sol@high`，下一轮免费重选；优先识别 `x-codex-turn-metadata.request_kind/compaction`，提示词仅兜底 |
 | `subagent_first` | 调 Jev，按子线程独立钉住 |
 
-`tool_continuation` 和同轮 `reuse` 都沿用现有状态。子 agent 的 Jev state 包含 `parent_tier`、`agent_name`、`subagent_kind` 和委托来源；路由 instructions 明确要求只评估子任务。Jev 低于 `0.5` 置信度时回退 `gpt-5.6-sol`；缺 key、超时或响应异常时 fail-open 到 `gpt-6-astra@medium`。Jev 单次超时 4 秒，失败后最多重试 2 次，退避为 0.25、0.5 秒。
+`tool_continuation` 和同轮 `reuse` 都沿用现有状态。子 agent 的 Jev state 包含 `parent_tier`、`agent_name`、`subagent_kind` 和委托来源；路由 instructions 明确要求只评估子任务。Jev 低于 `0.5` 置信度时回退 `gpt-5.6-sol`；缺 key、超时或响应异常时 fail-open 到 `gpt-6-astra@medium`。Jev 单次超时 4 秒，失败后最多重试 2 次，退避为 0.25、0.5 秒；HTTP 4xx 除 429 外不重试，429 遵守有上限的 `Retry-After`。默认连续 3 次失败后熔断 60 秒，期间以 `gate=jev_circuit_open` 直接 fail-open。参数位于 `[jev]`。
 
 Codex CLI 0.155.1 会把具体委托 payload 以 `encrypted_content` 发给后端，所以边界路由器当前以 `agent_name/task_name` 加已标注的父任务上下文作分档输入，并记 `delegation_source=agent_name_fallback`。代码已预留对未来明文 `NEW_TASK Payload` 和明文 spawn `message` 的优先提取；不尝试解密。
 
@@ -51,7 +51,7 @@ switch_cost = context_tokens × target.cache_write / 1_000_000
 stay_cost   = context_tokens × current.cached_input / 1_000_000
 ```
 
-两者差额超过 `$0.25` 时保持当前路由；上下文超过 `20000` token 时拒绝降级。上下文优先取上一响应 `response.completed.usage.input_tokens`，缺失时按请求字符数估算。价格和阈值都在 TOML 中可改。
+两者差额超过 `$0.25` 时保持当前路由；上下文超过 `20000` token 时拒绝降级。同模型只改变 effort 不会重建 prompt cache，因此直接按 cache-read 成本放行。上下文优先取上一响应 `response.completed.usage.input_tokens`，缺失时按本请求字符数估算，决策日志用 `context_source=usage|estimate` 标明来源。价格和阈值都在 TOML 中可改。
 
 ## 启动
 
@@ -183,7 +183,7 @@ python3 -m unittest -v
 python3 -m compileall -q codex_jev_router bench tests
 ```
 
-测试使用本地假 Jev 与假上游，不访问网络，覆盖四个决策时机、工具续跑、成本关卡、身份样例、Jev 重试和 fail-open、SSE 透传/组装、代理 CONNECT、状态和 HTTP 端点。
+测试使用本地假 Jev 与假上游，不访问网络，覆盖四个决策时机、真实 Codex 0.155.1 压缩 fixture、工具续跑、成本关卡、身份样例、Jev 重试/熔断和 fail-open、SSE 异常生命周期与组装、代理 CONNECT、状态和 HTTP 端点。
 
 ## 机械任务基准
 
