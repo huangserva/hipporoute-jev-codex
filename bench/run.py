@@ -226,7 +226,7 @@ def is_infrastructure_failure(exit_code: int, rows: list[dict[str, Any]]) -> boo
     if not decisions:
         return True
     gate = str(decisions[0].get("gate") or "")
-    if gate == "no_key" or gate.startswith("jev_error"):
+    if gate in ("no_key", "jev_circuit_open") or gate.startswith("jev_error"):
         return True
     return any(not isinstance(row.get("status"), int) or row["status"] != 200 for row in rows)
 
@@ -345,7 +345,14 @@ def _copy_workspace(destination: Path) -> None:
     copy_workspace(ROOT, destination)
 
 
-def _write_router_config(path: Path, run_dir: Path, port: int) -> None:
+def _write_router_config(
+    path: Path,
+    run_dir: Path,
+    port: int,
+    *,
+    luna_effort: str = "max",
+    confidence_gate: float = 0.5,
+) -> None:
     text = f'''[server]
 host = "127.0.0.1"
 port = {port}
@@ -367,12 +374,13 @@ raw_stream_dir = "{(run_dir / 'raw-streams').as_posix()}"
 timeout_seconds = 4
 retries = 2
 backoff_seconds = 0.25
-confidence_gate = 0.5
+confidence_gate = {confidence_gate}
 
 [routing]
 downgrade_max_context_tokens = 20000
 switch_budget_usd = 0.25
 chars_per_token = 2.8
+luna_effort = "{luna_effort}"
 summary_marker = false
 '''
     path.write_text(text, encoding="utf-8")

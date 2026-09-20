@@ -156,7 +156,7 @@ def _infrastructure_failure(exit_code: int, rows: list[dict[str, Any]]) -> bool:
         if row.get("event") not in ("first_request", "subagent_first"):
             continue
         gate = str(row.get("gate") or "")
-        if gate == "no_key" or gate.startswith("jev_error"):
+        if gate in ("no_key", "jev_circuit_open") or gate.startswith("jev_error"):
             return True
     return any(not isinstance(row.get("status"), int) or row["status"] != 200 for row in rows)
 

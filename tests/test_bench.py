@@ -17,6 +17,12 @@ from bench.run import (
     temporary_codex_config,
     _write_router_config,
 )
+from bench.run_tuning import (
+    aggregate_t3,
+    aggregate_t4,
+    annotate_threshold_threads,
+    rotating_schedule,
+)
 
 
 class ScheduleTests(unittest.TestCase):
@@ -30,6 +36,25 @@ class ScheduleTests(unittest.TestCase):
         pairs = [schedule[index : index + 2] for index in range(0, len(schedule), 2)]
         self.assertTrue(all(pair[0]["task"]["id"] == pair[1]["task"]["id"] for pair in pairs))
         self.assertEqual([pair[0]["mode"] for pair in pairs], ["shadow", "live", "live", "shadow", "shadow", "live"])
+
+    def test_tuning_variants_rotate_with_task_and_repeat(self):
+        tasks = [{"id": "a"}, {"id": "b"}]
+        schedule = rotating_schedule(tasks, ("max", "medium", "low"), 2)
+
+        self.assertEqual(len(schedule), 12)
+        cells = [
+            [item["variant"] for item in schedule[index : index + 3]]
+            for index in range(0, len(schedule), 3)
+        ]
+        self.assertEqual(
+            cells,
+            [
+                ["max", "medium", "low"],
+                ["medium", "low", "max"],
+                ["medium", "low", "max"],
+                ["low", "max", "medium"],
+            ],
+        )
 
 
 class UsageTests(unittest.TestCase):
@@ -122,6 +147,22 @@ class PersistenceTests(unittest.TestCase):
             self.assertIn(f'stream_debug = "{root / "stream.debug"}"', text)
             self.assertIn(f'raw_stream_dir = "{root / "raw-streams"}"', text)
 
+    def test_router_config_accepts_tuning_overrides(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "router.toml"
+            _write_router_config(
+                path,
+                root,
+                4320,
+                luna_effort="low",
+                confidence_gate=0.35,
+            )
+
+            text = path.read_text(encoding="utf-8")
+            self.assertIn('luna_effort = "low"', text)
+            self.assertIn("confidence_gate = 0.35", text)
+
     def test_jsonl_slice_starts_at_byte_offset(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "log.jsonl"
@@ -153,6 +194,12 @@ class FailureAndAggregateTests(unittest.TestCase):
         self.assertTrue(is_infrastructure_failure(1, healthy))
         self.assertTrue(is_infrastructure_failure(0, []))
         self.assertTrue(is_infrastructure_failure(0, [{"event": "first_request", "gate": "no_key", "status": 200}]))
+        self.assertTrue(
+            is_infrastructure_failure(
+                0,
+                [{"event": "first_request", "gate": "jev_circuit_open", "status": 200}],
+            )
+        )
 
     def test_aggregate_reports_group_savings_and_pass_rate(self):
         rows = []
@@ -192,6 +239,80 @@ class FailureAndAggregateTests(unittest.TestCase):
         self.assertEqual(summary["modes"]["live"]["jev_ms"]["median"], 200)
         self.assertEqual(summary["jev_mismatches"], [])
         self.assertEqual(summary["policy_mismatches"], ["r1"])
+
+
+class TuningAggregateTests(unittest.TestCase):
+    def test_t3_aggregate_reports_session_and_per_request_stats(self):
+        rows = [
+            {
+                "variant": "low",
+                "passed": True,
+                "infrastructure_failure": False,
+                "cost_usd": 0.01,
+                "wall_ms": 10_000,
+                "request_count": 2,
+                "missing_completed": 0,
+                "request_metrics": [
+                    {"output_tokens": 100, "total_ms": 1000},
+                    {"output_tokens": 300, "total_ms": 3000},
+                ],
+            },
+            {
+                "variant": "low",
+                "passed": False,
+                "infrastructure_failure": False,
+                "cost_usd": 0.03,
+                "wall_ms": 20_000,
+                "request_count": 4,
+                "missing_completed": 1,
+                "request_metrics": [{"output_tokens": 200, "total_ms": 2000}],
+            },
+        ]
+
+        result = aggregate_t3(rows)["variants"]["low"]
+
+        self.assertEqual(result["sessions"], 2)
+        self.assertEqual(result["pass_rate"], 0.5)
+        self.assertEqual(result["requests"]["median"], 3)
+        self.assertEqual(result["output_tokens_per_request"]["median"], 200)
+        self.assertEqual(result["request_ms"]["median"], 2000)
+        self.assertEqual(result["cost_total_usd"], 0.04)
+
+    def test_t4_annotation_and_aggregate_count_confidence_fallback(self):
+        sol_cost = ((1000 - 500) * 4 + 500 * 0.4 + 100 * 20) / 1_000_000
+        threads = annotate_threshold_threads(
+            [
+                {
+                    "thread_id": "child",
+                    "jev_tier_choice": "gpt-5.6-luna",
+                    "jev_tier_confidence": 0.42,
+                    "policy_model": "gpt-5.6-sol",
+                    "input_tokens": 1000,
+                    "cached_tokens": 500,
+                    "output_tokens": 100,
+                    "cost_usd": sol_cost,
+                }
+            ],
+            0.5,
+        )
+        rows = [
+            {
+                "variant": "0.5",
+                "passed": True,
+                "infrastructure_failure": False,
+                "wall_ms": 1000,
+                "threads": threads,
+            }
+        ]
+
+        thread = threads[0]
+        result = aggregate_t4(rows)["variants"]["0.5"]
+        self.assertTrue(thread["confidence_fallback"])
+        self.assertTrue(thread["luna_confidence_band_035_05"])
+        self.assertGreater(thread["fallback_extra_cost_usd"], 0)
+        self.assertEqual(result["fallback_threads"], 1)
+        self.assertEqual(result["band_threads"], 1)
+        self.assertEqual(result["pass_rate"], 1.0)
 
 
 if __name__ == "__main__":
