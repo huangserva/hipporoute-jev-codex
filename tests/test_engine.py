@@ -155,7 +155,7 @@ class EngineTests(unittest.TestCase):
         fake = FakeJev(
             answers=[{"answers": {"tier": {"choice": LUNA, "confidence": 0.9}, "depth": {"choice": "low"}}}]
         )
-        ticks = iter((10.0, 11.25))
+        ticks = iter((0.0, 10.0, 11.25))
         engine = self.engine(fake=fake, monotonic=lambda: next(ticks))
         headers, body = request()
 
@@ -181,6 +181,54 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(decision.event, "first_request")
         self.assertFalse(decision.consulted_jev)
         self.assertEqual(self.store.get(ROOT).model, ASTRA)
+
+    def test_key_loader_exception_fails_open_without_calling_jev(self):
+        fake = FakeJev(error=AssertionError("must not be called"))
+
+        def broken_key_loader():
+            raise OSError("unreadable key file")
+
+        engine = RouterEngine(
+            self.config,
+            self.store,
+            key_loader=broken_key_loader,
+            jev_factory=lambda _key: fake,
+        )
+        headers, body = request()
+
+        decision = engine.decide(headers, body, len(json.dumps(body)))
+
+        self.assertEqual((decision.model, decision.effort), (ASTRA, "medium"))
+        self.assertEqual(decision.gate, "jev_error:OSError")
+        self.assertFalse(decision.consulted_jev)
+        self.assertEqual(fake.states, [])
+
+    def test_gc_removes_expired_thread_lock(self):
+        now = [datetime(2026, 9, 20, tzinfo=timezone.utc)]
+        clock = [100.0]
+        config = replace(
+            self.config,
+            state_ttl_seconds=1,
+            state_gc_interval_seconds=0,
+        )
+        engine = RouterEngine(
+            config,
+            self.store,
+            key_loader=lambda: "",
+            now=lambda: now[0],
+            monotonic=lambda: clock[0],
+        )
+        headers, body = request(thread="expired-lock")
+        engine.decide(headers, body, len(json.dumps(body)))
+        self.assertIn("expired-lock", engine._thread_locks)
+
+        now[0] = datetime(2026, 9, 21, tzinfo=timezone.utc)
+        clock[0] += 2
+        other_headers, other_body = request(thread="active-lock")
+        engine.decide(other_headers, other_body, len(json.dumps(other_body)))
+
+        self.assertNotIn("expired-lock", engine._thread_locks)
+        self.assertIn("active-lock", engine._thread_locks)
 
     def test_subagent_uses_delegation_context_and_does_not_inherit_parent_model(self):
         parent_headers, parent_body = request()

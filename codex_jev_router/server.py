@@ -24,6 +24,13 @@ from .stream_debug import RawStreamCapture
 from .upstream import HOP_BY_HOP, UpstreamClient
 
 
+class _ClientError(Exception):
+    def __init__(self, status: int, message: str) -> None:
+        super().__init__(message)
+        self.status = status
+        self.message = message
+
+
 def _read_chunked(stream) -> bytes:
     chunks = []
     while True:
@@ -208,6 +215,11 @@ class RouterHandler(BaseHTTPRequestHandler):
         self._active_capture = None
         try:
             self._post()
+        except _ClientError as exc:
+            if self._headers_sent:
+                self.close_connection = True
+                return
+            self._json(exc.status, {"error": {"message": exc.message}})
         except (BrokenPipeError, ConnectionResetError):
             self.close_connection = True
             return
@@ -237,7 +249,13 @@ class RouterHandler(BaseHTTPRequestHandler):
     def _read_body(self) -> bytes:
         if "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
             return _read_chunked(self.rfile)
-        length = int(self.headers.get("Content-Length") or 0)
+        raw_length = self.headers.get("Content-Length") or "0"
+        try:
+            length = int(raw_length)
+        except ValueError as exc:
+            raise _ClientError(400, "invalid Content-Length") from exc
+        if length < 0:
+            raise _ClientError(400, "invalid Content-Length")
         body = self.rfile.read(length)
         if len(body) != length:
             raise ConnectionError("incomplete request body")

@@ -236,6 +236,23 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(models_data["data"][0]["id"], "auto")
         self.assertEqual(models_data["models"], [])
 
+    def test_invalid_content_length_returns_400(self):
+        request = (
+            b"POST /v1/responses HTTP/1.1\r\n"
+            + f"Host: 127.0.0.1:{self.server.server_port}\r\n".encode()
+            + b"Content-Type: application/json\r\n"
+            + b"Content-Length: not-a-number\r\n"
+            + b"Connection: close\r\n\r\n"
+        )
+        with socket.create_connection(("127.0.0.1", self.server.server_port), timeout=5) as sock:
+            sock.sendall(request)
+            raw = b""
+            while chunk := sock.recv(65536):
+                raw += chunk
+
+        self.assertTrue(raw.startswith(b"HTTP/1.1 400"))
+        self.assertIn(b"invalid Content-Length", raw)
+
     def test_direct_upstream_receives_one_content_type_header(self):
         self.post(True)
         raw_headers = FakeUpstreamHandler.seen[-1][1]

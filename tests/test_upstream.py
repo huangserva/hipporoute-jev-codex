@@ -25,6 +25,35 @@ class UpstreamTests(unittest.TestCase):
             "/_codex-router/local-secret/v1/responses",
         )
 
+    def test_getresponse_failure_closes_connection(self):
+        class Connection:
+            def __init__(self):
+                self.closed = False
+
+            def putrequest(self, *_args, **_kwargs):
+                pass
+
+            def putheader(self, *_args):
+                pass
+
+            def endheaders(self, _body):
+                pass
+
+            def getresponse(self):
+                raise ConnectionError("upstream disconnected")
+
+            def close(self):
+                self.closed = True
+
+        connection = Connection()
+        client = UpstreamClient.direct("https://chatgpt.com/backend-api/codex", timeout=10)
+
+        with mock.patch("codex_jev_router.upstream.make_connection", return_value=connection):
+            with self.assertRaises(ConnectionError):
+                client.open_response({"stream": True}, [], "/v1/responses")
+
+        self.assertTrue(connection.closed)
+
 
 if __name__ == "__main__":
     unittest.main()

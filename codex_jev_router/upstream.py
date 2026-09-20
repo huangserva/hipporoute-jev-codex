@@ -103,27 +103,36 @@ class UpstreamClient:
         incoming_path: str,
     ):
         parsed = self.parsed
-        connection = make_connection(parsed, timeout=self.timeout)
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         path = self.request_path(incoming_path)
-        connection.putrequest("POST", path, skip_host=True, skip_accept_encoding=True)
-        default_port = 443 if parsed.scheme == "https" else 80
-        host = parsed.hostname if not parsed.port or parsed.port == default_port else f"{parsed.hostname}:{parsed.port}"
-        connection.putheader("Host", host)
-        if self.mode == "direct":
-            for name, value in incoming_headers:
-                lower = name.lower()
-                if lower in HOP_BY_HOP or lower in {
-                    "host",
-                    "content-length",
-                    "content-type",
-                    "expect",
-                    "accept",
-                }:
-                    continue
-                connection.putheader(name, value)
-        connection.putheader("Content-Type", "application/json")
-        connection.putheader("Accept", "text/event-stream")
-        connection.putheader("Content-Length", str(len(body)))
-        connection.endheaders(body)
-        return connection, connection.getresponse()
+        connection = make_connection(parsed, timeout=self.timeout)
+        try:
+            connection.putrequest("POST", path, skip_host=True, skip_accept_encoding=True)
+            default_port = 443 if parsed.scheme == "https" else 80
+            host = (
+                parsed.hostname
+                if not parsed.port or parsed.port == default_port
+                else f"{parsed.hostname}:{parsed.port}"
+            )
+            connection.putheader("Host", host)
+            if self.mode == "direct":
+                for name, value in incoming_headers:
+                    lower = name.lower()
+                    if lower in HOP_BY_HOP or lower in {
+                        "host",
+                        "content-length",
+                        "content-type",
+                        "expect",
+                        "accept",
+                    }:
+                        continue
+                    connection.putheader(name, value)
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Accept", "text/event-stream")
+            connection.putheader("Content-Length", str(len(body)))
+            connection.endheaders(body)
+            response = connection.getresponse()
+        except Exception:
+            connection.close()
+            raise
+        return connection, response

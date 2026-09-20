@@ -127,13 +127,25 @@ class RouterEngine:
             return self._thread_locks.setdefault(thread_id, threading.RLock())
 
     def _maybe_gc(self) -> None:
-        current = time.monotonic()
+        current = self.monotonic()
         if current - self._last_gc_at < self.config.state_gc_interval_seconds:
             return
         with self._gc_lock:
             if current - self._last_gc_at < self.config.state_gc_interval_seconds:
                 return
-            self.store.gc_expired(self.now(), ttl_seconds=self.config.state_ttl_seconds)
+            expired_threads = self.store.gc_expired(
+                self.now(), ttl_seconds=self.config.state_ttl_seconds
+            )
+            with self._thread_locks_guard:
+                for thread_id in expired_threads:
+                    lock = self._thread_locks.get(thread_id)
+                    if lock is None or not lock.acquire(blocking=False):
+                        continue
+                    try:
+                        if self.store.get(thread_id) is None:
+                            self._thread_locks.pop(thread_id, None)
+                    finally:
+                        lock.release()
             with self._delegation_lock:
                 expired = [key for key, (_, deadline) in self._delegations.items() if deadline < current]
                 for key in expired:
@@ -151,9 +163,9 @@ class RouterEngine:
         parent_thread_id: str | None,
         delegations: list[SpawnDelegation],
     ) -> None:
-        if not parent_thread_id:
+        if not parent_thread_id or not delegations:
             return
-        deadline = time.monotonic() + self.config.state_ttl_seconds
+        deadline = self.monotonic() + self.config.state_ttl_seconds
         with self._delegation_lock:
             for delegation in delegations:
                 key = self._agent_key(delegation.agent_name)
@@ -173,7 +185,7 @@ class RouterEngine:
             if found is None:
                 return None
             delegation, deadline = found
-            if deadline < time.monotonic():
+            if deadline < self.monotonic():
                 del self._delegations[(parent_thread_id, key)]
                 return None
             return delegation
@@ -220,7 +232,15 @@ class RouterEngine:
     ) -> tuple[RouteCandidate, bool, int | None, dict[str, Any] | None]:
         if self._jev_circuit_is_open():
             return RouteCandidate(ASTRA, "medium", "default", "jev_circuit_open"), False, None, None
-        key = self.key_loader()
+        try:
+            key = self.key_loader()
+        except Exception as exc:
+            return (
+                RouteCandidate(ASTRA, "medium", "default", f"jev_error:{type(exc).__name__}"),
+                False,
+                None,
+                None,
+            )
         if not key:
             return RouteCandidate(ASTRA, "medium", "default", "no_key"), False, None, None
         started = self.monotonic()
