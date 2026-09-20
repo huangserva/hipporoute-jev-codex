@@ -1,4 +1,4 @@
-# 阶段一状态
+# 阶段二状态
 
 ## 已完成
 
@@ -11,9 +11,12 @@
 - 实现切换成本预算与 20000 token 降级硬阈值；价格、预算和阈值可配置。
 - 实现线程状态内存存储与原子 JSON 落盘、kill switch、shadow 文件哨兵、0600 JSONL 决策日志。
 - 实现 Codex Router caller edge 与 ChatGPT Codex 直连两种上游；HTTPS 直连遵守环境代理。
-- 完成 58 项离线单元测试。
+- 完成子 agent 委托提取、独立 Jev 上下文和父子链日志；子线程不无条件继承父模型。
+- 完成 per-thread 决策锁和默认 24 小时状态 TTL/保守 GC。
+- 完成 76 项离线单元测试，覆盖委托提取、子线程独立决策、同线程并发只决策一次和 GC。
 - 用真实 Jev key 完成 shadow 与真路由对照；`response.completed.model` 证明 luna/astra 实际切换，详见 `docs/2026-09-19-真实Jev端到端.md`。
 - 增加可重复的 8 任务机械/推理基准驱动；48 个正式新会话全部通过，机械组费用降低 95.36%，全任务费用降低 44.75%，详见 `docs/2026-09-19-机械任务基准.md`。
+- 增加可重复的 4 任务原生 fan-out 基准；24 个有效会话全部通过，已完成 SSE 的子 agent 费用降低 83.90%，父子合计降低 79.74%，详见 `docs/2026-09-20-子agent分档基准.md`。
 - 完成 Codex CLI 0.155.1 真实端到端：两个用户轮次、至少两次工具续跑和一个原生子 agent；无 Jev key 时决策点均正确记为 `no_key` 并走 `astra@medium`。
 - 端到端实验后已恢复 `~/.codex/config.toml`，恢复文件与实验前备份的 SHA-256 一致。
 
@@ -22,23 +25,23 @@
 - 未实现 Codex-dry 备用梯队。
 - 未实现旧路由器的调试抓包、用量汇总、launchd/watchdog 安装器和 UI reasoning summary 标记。
 - `SummaryMarker` 仅保留了关闭的配置位，尚未向 SSE 插入可见路由标记。
-- 真实 Jev 分类基准目前只覆盖 8 个任务、每格 3 次；还没有覆盖多仓库、多语言、长任务或人工质量评分。
+- 真实 Jev 基准目前只覆盖 8 个单 agent 任务和 4 个 fan-out 任务、每格 3 次；还没有覆盖多仓库、多语言、长任务或人工质量评分。
 - 未在本机安装 Codex Router，因此 caller edge 仅有协议/路径单测，真实端到端使用直连模式。
 
 ## 已知问题
 
 - Codex 的私有 header 和 `x-codex-turn-metadata` 不是稳定公开协议；升级 Codex CLI 后应重跑线程标识与子 agent fixture 验证。
-- 同一线程如果并发到达两个请求，当前存储写入本身是线程安全和原子的，但“读状态—决策—写状态”不是每线程事务；正常 Codex 串行续跑不受影响，阶段二应加入 per-thread lock。
-- 内存状态不会自动淘汰；长期运行需要按最后活动时间做保守 GC。
+- Codex CLI 0.155.1 在子线程 `NEW_TASK` 和父线程 `spawn_agent` arguments 中都将具体委托 payload 加密；当前只能以 agent name 加父任务上下文分档，无语义名称会降低准确性。
+- fan-out 基准中 live 有 18 条父线程流缺 `response.completed`，子线程为 0；没有 usage 的流无法计价，导致 live 费用下界比 shadow 更低估。
 - 直连模式会把 Codex 登录态认证 header 转发给 `chatgpt.com`，仅适合本机回环开发；不得把监听地址改为外网接口。
 - `/v1/models` 为兼容 Codex CLI 0.155.1 返回双结构；未来 CLI 目录协议改变时需要适配。
 - 字符估算只是 usage 缺失时的兜底，中文/工具 schema 很大时误差可能显著。
 
-## 阶段二：子 agent 分档所需工作
+## 阶段二完成后仍需的工作
 
-1. 用真实 Jev key 对主线程和多类子 agent 任务建立带人工标签的评测集，校准 tier/depth 问题、0.5 门槛及各档 effort。
-2. 明确 Codex 原生子 agent 与 `~/.codex/agents/` 自定义 agent 的稳定标识，至少覆盖 collab spawn、fork、嵌套子 agent 和重启恢复。
-3. 为子 agent 增加专属特征：父线程已钉档位、委托文本、agent role/name、只读/写入权限、预期 fan-out；不要把父线程模型无条件继承给子线程。
-4. 加 per-thread 锁、状态 TTL/GC、并发压力测试和崩溃恢复测试。
+1. 扩大带人工质量标签的子任务样本，重点校准 0.5 置信度门槛；`luna@max` 的 effort 问题按约定留到本阶段之后处理。
+2. 覆盖 fork、嵌套子 agent、`~/.codex/agents/` 自定义 agent 和路由器重启恢复，验证标识和委托缓存的稳定性。
+3. 与 Codex 协议层协作，让边界获得可控、脱敏的明文委托摘要；在此之前保留 `agent_name_fallback` 的可观测警告。
+4. 为 per-thread lock 增加长时运行压力测试，为状态落盘增加崩溃恢复验收。
 5. 在安装了 Codex Router 的机器上做 caller edge 真实验收，验证 caller secret、shared session、目录刷新和服务托管。
-6. 在真实流量的 shadow 模式比较 `would` 与现有路由的质量、成本和切换率，确认阈值后再启用实际分档。
+6. 查明父线程缺 `response.completed` 的原因，必要时为未完成流建立可审计的 usage 估算上界，再做更大规模 shadow/live 测量。

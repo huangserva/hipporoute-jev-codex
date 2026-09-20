@@ -1,8 +1,8 @@
-# Codex + Jev 边界路由器（阶段一）
+# Codex + Jev 边界路由器
 
 这是一个只监听本机回环地址的 OpenAI Responses 兼容服务。它在 Codex 与真实后端之间维持线程级路由状态，只在边界事件调用 Jev，随后将所选 `model`、`reasoning.effort` 和 `service_tier` 写入上游请求。
 
-阶段一的核心约束是“线程内钉住”：首请求、新用户轮次、压缩检查点和子 agent 首请求之外，不重新决策；同一 `thread-id + turn_id` 的工具续跑绝不调用 Jev。
+核心约束是“线程内钉住”：首请求、新用户轮次、压缩检查点和子 agent 首请求之外，不重新决策；同一 `thread-id + turn_id` 的工具续跑绝不调用 Jev。阶段二让每个原生子 agent 在首请求独立分档，不无条件继承父线程模型。
 
 ## 能力
 
@@ -37,7 +37,11 @@
 | `compaction` | 本次强制 `gpt-5.6-sol@high`，下一轮免费重选 |
 | `subagent_first` | 调 Jev，按子线程独立钉住 |
 
-`tool_continuation` 和同轮 `reuse` 都沿用现有状态。Jev 低于 `0.5` 置信度时回退 `gpt-5.6-sol`；缺 key、超时或响应异常时 fail-open 到 `gpt-6-astra@medium`。Jev 单次超时 4 秒，失败后最多重试 2 次，退避为 0.25、0.5 秒。
+`tool_continuation` 和同轮 `reuse` 都沿用现有状态。子 agent 的 Jev state 包含 `parent_tier`、`agent_name`、`subagent_kind` 和委托来源；路由 instructions 明确要求只评估子任务。Jev 低于 `0.5` 置信度时回退 `gpt-5.6-sol`；缺 key、超时或响应异常时 fail-open 到 `gpt-6-astra@medium`。Jev 单次超时 4 秒，失败后最多重试 2 次，退避为 0.25、0.5 秒。
+
+Codex CLI 0.155.1 会把具体委托 payload 以 `encrypted_content` 发给后端，所以边界路由器当前以 `agent_name/task_name` 加已标注的父任务上下文作分档输入，并记 `delegation_source=agent_name_fallback`。代码已预留对未来明文 `NEW_TASK Payload` 和明文 spawn `message` 的优先提取；不尝试解密。
+
+同一 thread id 的决策临界区由 per-thread lock 串行化。状态按 `last_active_at` 做保守 GC，默认 TTL 是 86400 秒、GC 间隔是 300 秒，可在 `[routing]` 的 `state_ttl_seconds` 和 `state_gc_interval_seconds` 修改。
 
 切换成本按每百万 token 的美元价格计算：
 
@@ -186,3 +190,14 @@ python3 bench/run.py --repeats 3 --run-id full-YYYYMMDD
 ```
 
 正式基准使用 8 个任务、shadow/live 各 3 遍，共 48 个独立新会话；基础设施失败最多重试 2 次，任务本身未通过不会重试。2026-09-20 的实测结果是 48/48 通过，机械组节省 95.36%，全任务节省 44.75%，详见 `docs/2026-09-19-机械任务基准.md`。
+
+## 子 agent 分档基准
+
+`bench/run_subagent.py` 用 4 个自动验收的 fan-out 任务验证父/子线程独立分档，同样会负责启动路由器、交替 shadow/live、备份恢复 Codex 配置、重试基础设施失败并清理工作副本。
+
+```bash
+python3 bench/run_subagent.py --dry-run --run-id subagent-dry-YYYYMMDD
+python3 bench/run_subagent.py --repeats 3 --run-id subagent-full-YYYYMMDD
+```
+
+2026-09-20 的 24 个有效会话全部通过；已完成 SSE 的子 agent 费用降低 83.90%，父子合计降低 79.74%，但 live 墙钟高 21.55% 且缺 completed 数更多，必须按单次受控样本解读。详见 `docs/2026-09-20-子agent分档基准.md`。
