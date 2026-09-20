@@ -10,10 +10,20 @@ from bench.run_subagent import (
     codex_thread_id,
     filter_thread_tree,
     thread_metrics,
+    selected_schedule,
 )
 
 
 class SubagentScheduleTests(unittest.TestCase):
+    def test_live_only_schedule_runs_each_repeat_once(self):
+        tasks = [{"id": "s2"}]
+
+        schedule = selected_schedule(tasks, 6, ("live",))
+
+        self.assertEqual(len(schedule), 6)
+        self.assertEqual([item["repeat"] for item in schedule], [1, 2, 3, 4, 5, 6])
+        self.assertTrue(all(item["mode"] == "live" for item in schedule))
+
     def test_read_only_fanout_uses_sandbox_safe_test_modules(self):
         root = Path(__file__).resolve().parents[1]
         tasks = json.loads((root / "bench" / "tasks-subagent.json").read_text(encoding="utf-8"))

@@ -40,6 +40,14 @@ from bench.run import (
 TASKS_PATH = ROOT / "bench" / "tasks-subagent.json"
 
 
+def selected_schedule(
+    tasks: list[dict[str, Any]], repeats: int, modes: tuple[str, ...]
+) -> list[dict[str, Any]]:
+    """Return the balanced schedule restricted to requested modes."""
+
+    return [item for item in balanced_schedule(tasks, repeats) if item["mode"] in modes]
+
+
 def _stats(values: list[float]) -> dict[str, Any]:
     return {
         "n": len(values),
@@ -306,7 +314,10 @@ def run_benchmark(args: argparse.Namespace) -> Path:
     repeats = 1 if args.dry_run else args.repeats
     if args.dry_run:
         tasks = tasks[:1]
-    schedule = balanced_schedule(tasks, repeats)
+    modes = tuple(part.strip() for part in args.modes.split(",") if part.strip())
+    if not modes or any(mode not in ("shadow", "live") for mode in modes):
+        raise ValueError("modes must contain shadow and/or live")
+    schedule = selected_schedule(tasks, repeats, modes)
     run_id = args.run_id or time.strftime(("subagent-dry" if args.dry_run else "subagent") + "-%Y%m%d-%H%M%S")
     run_dir = ROOT / "runtime" / "bench" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -403,6 +414,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--task-ids")
+    parser.add_argument("--modes", default="shadow,live")
     parser.add_argument("--run-id")
     parser.add_argument("--port", type=int, default=4320)
     parser.add_argument("--max-retries", type=int, default=2)
