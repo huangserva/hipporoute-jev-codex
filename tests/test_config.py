@@ -22,6 +22,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.jev_retry_after_cap_seconds, 4.0)
         self.assertEqual(config.jev_circuit_failure_threshold, 3)
         self.assertEqual(config.jev_circuit_open_seconds, 60.0)
+        self.assertIsNone(config.jev_key_file)
         self.assertEqual(config.luna_effort, "low")
         self.assertEqual(config.stream_debug_path, Path.home() / ".codex/codex-jev-router/stream.debug")
         self.assertEqual(config.raw_stream_dir, Path.home() / ".codex/codex-jev-router/raw-streams")
@@ -46,6 +47,8 @@ caller_edge_url = "http://127.0.0.1:4202"
 state = "./state.json"
 stream_debug = "./stream.debug"
 raw_stream_dir = "./raw-streams"
+[jev]
+key_file = "./private/jev.env"
 [routing]
 state_ttl_seconds = 7200
 state_gc_interval_seconds = 60
@@ -64,6 +67,7 @@ luna_effort = "medium"
         self.assertEqual(config.state_path, Path("./state.json"))
         self.assertEqual(config.stream_debug_path, Path("./stream.debug"))
         self.assertEqual(config.raw_stream_dir, Path("./raw-streams"))
+        self.assertEqual(config.jev_key_file, Path("./private/jev.env"))
         self.assertEqual(config.state_ttl_seconds, 7200)
         self.assertEqual(config.state_gc_interval_seconds, 60)
         self.assertEqual(config.state_flush_interval_seconds, 0.5)
@@ -75,6 +79,14 @@ luna_effort = "medium"
             path.write_text('[routing]\nluna_effort = "extreme"\n', encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "luna_effort"):
+                load_config(path)
+
+    def test_literal_jev_key_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text('[jev]\nkey = "must-not-be-supported"\n', encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "key_file"):
                 load_config(path)
 
     def test_nonpositive_server_resource_limits_are_rejected(self):

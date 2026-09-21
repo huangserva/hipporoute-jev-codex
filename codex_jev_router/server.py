@@ -17,6 +17,7 @@ from typing import Any
 from . import __version__
 from .config import RouterConfig
 from .engine import Decision, RouterEngine
+from .jev import load_key
 from .policy import estimate_context_tokens, inspect_request
 from .state import ThreadStateStore
 from .sse import SSEUsageTracker, assemble_sse
@@ -170,9 +171,9 @@ def build_app(config: RouterConfig, *, key_loader=None, jev_factory=None) -> Rou
         config.state_path,
         flush_interval_seconds=config.state_flush_interval_seconds,
     )
-    engine_kwargs = {}
-    if key_loader is not None:
-        engine_kwargs["key_loader"] = key_loader
+    engine_kwargs = {
+        "key_loader": key_loader or (lambda: load_key(key_file=config.jev_key_file)),
+    }
     if jev_factory is not None:
         engine_kwargs["jev_factory"] = jev_factory
     engine = RouterEngine(config, store, **engine_kwargs)

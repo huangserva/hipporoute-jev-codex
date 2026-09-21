@@ -44,6 +44,28 @@ class JevTests(unittest.TestCase):
             value = load_key({"TYPESAFE_API_KEY": "environment-key"}, path)
         self.assertEqual(value, "environment-key")
 
+    def test_configured_key_file_wins_over_default_env_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            configured = root / "configured.env"
+            default = root / ".jev.env"
+            configured.write_text("TYPESAFE_API_KEY=configured-key\n", encoding="utf-8")
+            default.write_text("TYPESAFE_API_KEY=default-key\n", encoding="utf-8")
+
+            value = load_key({}, configured, default_env_path=default)
+
+        self.assertEqual(value, "configured-key")
+
+    def test_missing_configured_key_file_falls_back_to_default_env_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            default = root / ".jev.env"
+            default.write_text("TYPESAFE_API_KEY=default-key\n", encoding="utf-8")
+
+            value = load_key({}, root / "missing.env", default_env_path=default)
+
+        self.assertEqual(value, "default-key")
+
     def test_two_retries_use_exponential_backoff(self):
         attempts = []
         delays = []

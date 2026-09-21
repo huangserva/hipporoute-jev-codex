@@ -32,6 +32,7 @@ class RouterConfig:
     shadow_path: Path
     stream_debug_path: Path
     raw_stream_dir: Path
+    jev_key_file: Path | None
     jev_url: str
     jev_model: str
     jev_timeout_seconds: float
@@ -76,6 +77,7 @@ DEFAULTS: dict[str, Any] = {
         "raw_stream_dir": str(DEFAULT_STATE_DIR / "raw-streams"),
     },
     "jev": {
+        "key_file": None,
         "url": "https://api.typesafe.ai/v1/systemone",
         "model": "jev-latest",
         "timeout_seconds": 4.0,
@@ -126,6 +128,11 @@ def load_config(path: str | Path | None) -> RouterConfig:
             raise ValueError("configuration root must be a TOML table")
         data = decoded
 
+    jev_section = _section(data, "jev")
+    forbidden_key_fields = {"key", "api_key", "typesafe_api_key"} & set(jev_section)
+    if forbidden_key_fields:
+        raise ValueError("literal Jev keys are not supported; use jev.key_file")
+
     price_data = _section(data, "prices")
     prices = {}
     for model, defaults in DEFAULTS["prices"].items():
@@ -161,6 +168,7 @@ def load_config(path: str | Path | None) -> RouterConfig:
             raise ValueError(f"server.{key} must be positive")
     if state_flush_interval_seconds <= 0:
         raise ValueError("routing.state_flush_interval_seconds must be positive")
+    raw_key_file = _value(data, "jev", "key_file")
     return RouterConfig(
         listen_host=str(_value(data, "server", "host")),
         listen_port=int(_value(data, "server", "port")),
@@ -178,6 +186,7 @@ def load_config(path: str | Path | None) -> RouterConfig:
         shadow_path=_path(_value(data, "paths", "shadow")),
         stream_debug_path=_path(_value(data, "paths", "stream_debug")),
         raw_stream_dir=_path(_value(data, "paths", "raw_stream_dir")),
+        jev_key_file=_path(raw_key_file) if raw_key_file else None,
         jev_url=str(_value(data, "jev", "url")),
         jev_model=str(_value(data, "jev", "model")),
         jev_timeout_seconds=float(_value(data, "jev", "timeout_seconds")),

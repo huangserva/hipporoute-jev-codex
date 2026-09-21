@@ -67,20 +67,29 @@ def questions_for(*, is_subagent: bool) -> dict[str, Any]:
 
 def load_key(
     environ: Mapping[str, str] | None = None,
-    env_path: str | Path = Path("~/.jev.env").expanduser(),
+    key_file: str | Path | None = None,
+    *,
+    default_env_path: str | Path = Path("~/.jev.env").expanduser(),
 ) -> str:
     environment = os.environ if environ is None else environ
     value = str(environment.get("TYPESAFE_API_KEY", "")).strip()
     if value:
         return value
-    try:
-        with open(env_path, encoding="utf-8") as handle:
-            for line in handle:
-                stripped = line.strip()
-                if stripped.startswith("TYPESAFE_API_KEY="):
-                    return stripped.split("=", 1)[1].strip().strip('"').strip("'")
-    except OSError:
-        pass
+    paths = []
+    if key_file is not None:
+        paths.append(Path(key_file).expanduser())
+    default_path = Path(default_env_path).expanduser()
+    if default_path not in paths:
+        paths.append(default_path)
+    for path in paths:
+        try:
+            with path.open(encoding="utf-8") as handle:
+                for line in handle:
+                    stripped = line.strip()
+                    if stripped.startswith("TYPESAFE_API_KEY="):
+                        return stripped.split("=", 1)[1].strip().strip('"').strip("'")
+        except OSError:
+            continue
     return ""
 
 
