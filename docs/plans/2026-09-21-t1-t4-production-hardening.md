@@ -61,7 +61,7 @@
 
 **Files:**
 - Modify: `STATUS.md`
-- Create: `docs/2026-09-21-结论落地.md`
+- Create: `docs/experiments/2026-09-21-结论落地.md`
 
 1. 备份并记录 `~/.codex/config.toml` SHA-256。
 2. 用 `bench/run_subagent.py` 仅运行 `s2_parallel_tests` live 3 遍；不改 0.5 门槛，核对父线程 raw tier/confidence、实际模型、通过率和 completed model。

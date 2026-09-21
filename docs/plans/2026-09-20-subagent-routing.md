@@ -86,7 +86,7 @@
 ### Task 6: Run the real benchmark and report
 
 **Files:**
-- Create: `docs/2026-09-20-子agent分档基准.md`
+- Create: `docs/experiments/2026-09-20-子agent分档基准.md`
 - Modify: `README.md`
 - Modify: `STATUS.md`
 

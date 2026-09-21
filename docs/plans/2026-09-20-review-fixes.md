@@ -89,7 +89,7 @@
 ### Task 8: 文档与最终验证
 
 **Files:**
-- Create: `docs/2026-09-20-评审修复.md`
+- Create: `docs/experiments/2026-09-20-评审修复.md`
 - Modify: `STATUS.md`
 
 1. 记录每条修法、红绿证据、真实压缩 fixture 来源、剩余已知问题。

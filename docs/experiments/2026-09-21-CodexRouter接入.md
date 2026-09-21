@@ -7,7 +7,7 @@
 | 项目 | 实测结果 |
 |---|---|
 | Codex Router | `0.6.0`，LaunchAgent 正常，`127.0.0.1:4202/health` 返回 `ok=true` |
-| Codex 配置 | 安装前备份 `~/.codex/config.toml.backup-before-codex-router-20260921-073444`，SHA-256 `5cbb7dc4…1a83`；当前为 Codex Router managed 配置 |
+| Codex 配置 | 安装前备份 `~/.codex/config.toml.backup-before-codex-router-<timestamp>`，SHA-256 `<redacted-sha256>`；当前为 Codex Router managed 配置 |
 | ChatGPT session | `sharing=enabled`、`session=usable`；caller secret 为 `~/.codex/codex-router/caller-secret`，权限 0600 |
 | Jev 服务 | `com.jev.codex-jev-router`，`127.0.0.1:4319`，health 为 `jev_key=true` |
 | Jev 上游 | `caller_edge`，配置只保存 4202 地址与 caller-secret 文件路径，不保存 secret 内容 |
@@ -15,13 +15,13 @@
 | 目录 | `jev/auto` → `jev-auto` → upstream `auto`；effort 为 low/medium/high/xhigh/max；picker visible |
 | 模式 | `~/.codex/codex-jev-router/router.shadow` 保持存在 |
 
-安装前先用旧版 `scripts/disable.sh` 恢复了原配置，SHA-256 与既有恢复点 `5cbb7dc4…1a83` 完全一致；随后才执行 Codex Router 安装。安装器在 `~/.codex/config.toml` 写入了带 `BEGIN/END codex-router-managed` 的 4202 入口和 `[model_providers.codex-router]`，没有把 Jev key 或 caller secret 写入配置。
+安装前先用旧版 `scripts/disable.sh` 恢复了原配置，SHA-256 与既有恢复点 `<redacted-sha256>` 完全一致；随后才执行 Codex Router 安装。安装器在 `~/.codex/config.toml` 写入了带 `BEGIN/END codex-router-managed` 的 4202 入口和 `[model_providers.codex-router]`，没有把 Jev key 或 caller secret 写入配置。
 
 本机需要 `HTTPS_PROXY=http://127.0.0.1:7897` 才能稳定访问外网。Codex Router 服务已启用 Node 的代理环境；`scripts/install-service.sh` 还安装 `com.jev.codex-router-loopback-env.plist`，在 GUI launchd 域持久设置 `NO_PROXY=localhost,127.0.0.1,::1`，避免 ChatGPT.app 把本机 4202/4319 请求送进出网代理。
 
 ## 七步安装与验证记录
 
-1. 撤销旧直连：旧 `disable.sh` 恢复后，`shasum -a 256 ~/.codex/config.toml` 为 `5cbb7dc4…1a83`。
+1. 撤销旧直连：旧 `disable.sh` 恢复后，`shasum -a 256 ~/.codex/config.toml` 为 `<redacted-sha256>`。
 2. 安装 Codex Router：从参考 checkout 运行官方 `install.sh`。首次使用 `--no-discovery` 得到空目录，因此用支持的 `codex-router disable` 清理 managed 块后重新安装并发现 11 个 native models。原生 `codex exec 'Say OK'` 经 4202 正常返回 `OK`。
 3. 开 shared session：`chatgpt-session status --json` 返回 `sharing=enabled, session=usable`；secret 文件非空且权限 0600，任何命令输出和仓库文件均未记录其内容。
 4. 切 Jev 上游：`config.service.toml` 设置 `mode=caller_edge`、URL 只到 `http://127.0.0.1:4202`，secret 由 `caller_secret_path` 运行时读取。launchd 重启后 health 仍是：
@@ -58,7 +58,7 @@ Codex Router 的 native 路径有 `thread-id`、`x-codex-turn-metadata` 等转�
 启用（幂等）：
 
 ```bash
-cd <home>/development/Jev/codex-jev-router
+cd <repo>
 scripts/install-service.sh
 scripts/enable.sh
 ```
@@ -114,9 +114,9 @@ rm -f ~/.codex/codex-jev-router/router.shadow
 先隐藏自定义项并停本服务：
 
 ```bash
-cd <home>/development/Jev/codex-jev-router
+cd <repo>
 scripts/disable.sh --stop-service
-cd <home>/development/Jev/codex-router
+cd <path-to-codex-router>
 ./bin/codex-router chatgpt-session disable
 ./bin/codex-router uninstall
 ```
@@ -128,7 +128,7 @@ shasum -a 256 ~/.codex/config.toml
 # 期望安装前值：<redacted-sha256>
 ```
 
-若官方 uninstall 未恢复到该哈希，先保留当前文件作故障证据，再从 `~/.codex/config.toml.backup-before-codex-router-20260921-073444` 恢复。最后可 bootout 并删除 `com.jev.codex-jev-router.plist` 与 `com.jev.codex-router-loopback-env.plist`；不要删除 `~/.codex/hooks.json`。本次没有实际执行卸载，因为目标是保持一周 shadow 运行。
+若官方 uninstall 未恢复到该哈希，先保留当前文件作故障证据，再从 `~/.codex/config.toml.backup-before-codex-router-<timestamp>` 恢复。最后可 bootout 并删除 `com.jev.codex-jev-router.plist` 与 `com.jev.codex-router-loopback-env.plist`；不要删除 `~/.codex/hooks.json`。本次没有实际执行卸载，因为目标是保持一周 shadow 运行。
 
 ## 当前边界
 

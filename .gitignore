@@ -13,6 +13,10 @@ config.local.toml
 config.service.toml
 config.e2e.toml
 config.toml.backup-*
+*.backup-*
 *.backup
 *.bak
+.env
+*.env
+!.env.example
 codex-*.log

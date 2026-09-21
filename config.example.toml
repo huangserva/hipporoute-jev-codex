@@ -1,20 +1,27 @@
+# Codex + Jev Router configuration (Python 3.11+; no third-party packages).
+# Copy to config.local.toml. The local file is ignored by Git.
+
 [server]
+# Keep this on a loopback address: the HTTP API has no local authentication.
 host = "127.0.0.1"
 port = 4319
+# Reject oversized request bodies, idle clients, and excess concurrent POSTs.
 max_request_body_bytes = 16777216
 client_socket_timeout_seconds = 30
 max_concurrent_requests = 64
 
 [upstream]
-# "direct" uses the ChatGPT Codex backend and honors HTTPS_PROXY.
-# "caller_edge" uses Codex Router's local shared-session endpoint.
+# direct: ChatGPT Codex backend, using Codex's subscription Authorization header.
+# caller_edge: Codex Router's shared-session endpoint.
 mode = "direct"
 direct_url = "https://chatgpt.com/backend-api/codex"
 caller_edge_url = "http://127.0.0.1:4202"
+# Created by `codex-router chatgpt-session enable`; content is never copied here.
 caller_secret_path = "~/.codex/codex-router/caller-secret"
 timeout_seconds = 900
 
 [paths]
+# Runtime files can contain thread identifiers and prompt-derived previews.
 state = "~/.codex/codex-jev-router/threads.json"
 decision_log = "~/.codex/codex-jev-router/decisions.jsonl"
 off = "~/.codex/codex-jev-router/router.off"
@@ -23,6 +30,10 @@ stream_debug = "~/.codex/codex-jev-router/stream.debug"
 raw_stream_dir = "~/.codex/codex-jev-router/raw-streams"
 
 [jev]
+# Key order: TYPESAFE_API_KEY env, this optional key_file, then ~/.jev.env.
+# The file contains one line: TYPESAFE_API_KEY=your_key
+# Literal key/api_key/typesafe_api_key fields are rejected.
+# key_file = "~/.config/codex-jev-router/jev.env"
 url = "https://api.typesafe.ai/v1/systemone"
 model = "jev-latest"
 timeout_seconds = 4
@@ -37,12 +48,14 @@ confidence_gate = 0.5
 downgrade_max_context_tokens = 20000
 switch_budget_usd = 0.25
 chars_per_token = 2.8
+# Allowed: low, medium, high, xhigh, max. Benchmarked default is low.
 luna_effort = "low"
 state_ttl_seconds = 86400
 state_gc_interval_seconds = 300
 state_flush_interval_seconds = 2
 summary_marker = false
 
+# USD per million tokens. Update when upstream pricing changes.
 [prices."gpt-6-astra"]
 input = 10.00
 cached_input = 1.00

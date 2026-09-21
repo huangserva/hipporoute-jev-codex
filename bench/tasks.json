@@ -36,13 +36,13 @@
     "id": "m3_fix_typo",
     "category": "mechanical",
     "expected_model": "gpt-5.6-luna",
-    "prompt": "修正 README.md 第一行标题里明显的“路由气”拼写错误，只改这一处。",
+    "prompt": "修正 README.md 第一行标题里明显的“Routre”拼写错误，只改这一处。",
     "prepare": [
       {
         "type": "replace",
         "path": "README.md",
-        "find": "# Codex + Jev 边界路由器",
-        "replace": "# Codex + Jev 边界路由气",
+        "find": "# Codex + Jev Router",
+        "replace": "# Codex + Jev Routre",
         "count": 1
       }
     ],
@@ -50,9 +50,9 @@
       {
         "type": "file_contains_all",
         "path": "README.md",
-        "values": ["# Codex + Jev 边界路由器"]
+        "values": ["# Codex + Jev Router"]
       },
-      {"type": "file_not_contains_all", "path": "README.md", "values": ["路由气"]}
+      {"type": "file_not_contains_all", "path": "README.md", "values": ["Routre"]}
     ]
   },
   {

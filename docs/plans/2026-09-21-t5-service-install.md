@@ -54,7 +54,7 @@
 **Files:**
 - Modify: `README.md`
 - Modify: `STATUS.md`
-- Create: `docs/2026-09-21-T5-安装.md`
+- Create: `docs/experiments/2026-09-21-T5-安装.md`
 - Create at runtime: `~/Library/LaunchAgents/com.jev.codex-jev-router.plist`
 - Modify with backup retained: `~/.codex/config.toml`
 

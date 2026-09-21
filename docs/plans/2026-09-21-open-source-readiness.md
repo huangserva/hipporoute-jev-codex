@@ -38,7 +38,7 @@
 
 ### Task 4: Public documentation and project metadata
 
-**Files:** Rewrite `README.md`; modify `STATUS.md`, scripts and experiment docs; create `LICENSE`, `CONTRIBUTING.md`, `CHANGELOG.md`, and `docs/2026-09-21-开源前审计.md`.
+**Files:** Rewrite `README.md`; modify `STATUS.md`, scripts and experiment docs; create `LICENSE`, `CONTRIBUTING.md`, `CHANGELOG.md`, and `docs/experiments/2026-09-21-开源前审计.md`.
 
 1. Remove machine-specific paths, proxy defaults, backup hashes, and private identity from the current tree.
 2. Document direct and Codex Router deployment, key choices, modes, configuration, logs, benchmark limits, risks, and rollback.

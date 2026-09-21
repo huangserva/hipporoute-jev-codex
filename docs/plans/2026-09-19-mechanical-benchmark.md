@@ -46,7 +46,7 @@
 
 ### Task 5: Analyze and report
 
-**Files:** create `docs/2026-09-19-机械任务基准.md`; update README/STATUS only if behavior changed.
+**Files:** create `docs/experiments/2026-09-19-机械任务基准.md`; update README/STATUS only if behavior changed.
 
 1. Generate per-task medians/ranges, group savings, pass rates, mismatch list, latency and missing-completed counts from raw JSONL.
 2. Write evidence-backed conclusions and limitations.
