@@ -27,7 +27,9 @@
 2. `client_metadata.thread_id`
 3. `x-codex-turn-metadata.thread_id`
 
-多个来源不一致时记为 `identity_conflict`，fail-open 到 `gpt-6-astra@medium`，不污染线程状态。`prompt_cache_key` 不参与线程识别。子 agent 由 `x-openai-subagent: collab_spawn` 或 `x-codex-parent-thread-id` 识别，并以自己的 thread id 独立钉住。
+多个来源不一致时记为 `identity_conflict`，fail-open 到 `gpt-6-astra@medium`，不污染线程状态。子 agent 由 `x-openai-subagent: collab_spawn` 或 `x-codex-parent-thread-id` 识别，并以自己的 thread id 独立钉住。
+
+Codex Router 0.6.0 的 generic provider 路径会主动删除 `client_metadata`，也不会把 Codex 私有 thread headers 转发给 provider。只有在三个正式来源全部缺失时，本服务才启用 caller-edge 兼容回退：根线程使用 `prompt_cache_key`，子线程必须再拼上稳定的 `NEW_TASK` message id，轮次使用最新 user message id。这里没有把 `prompt_cache_key` 单独当作任意子线程键；正式字段一旦存在就完全优先。这个回退依赖 Codex Router 当前保留 message id 的行为，升级后必须重验。
 
 只有以下事件允许改变路由：
 
@@ -59,9 +61,9 @@ stay_cost   = context_tokens × current.cached_input / 1_000_000
 
 两者差额超过 `$0.25` 时保持当前路由；上下文超过 `20000` token 时拒绝降级。同模型只改变 effort 不会重建 prompt cache，因此直接按 cache-read 成本放行。上下文优先取上一响应 `response.completed.usage.input_tokens`，缺失时按本请求字符数估算，决策日志用 `context_source=usage|estimate` 标明来源。价格和阈值都在 TOML 中可改。
 
-## 常驻 shadow 安装（macOS）
+## 常驻 shadow 安装（macOS + Codex Router）
 
-T5 推荐路径是用户级 launchd。安装器生成 `~/Library/LaunchAgents/com.jev.codex-jev-router.plist`，设置 `RunAtLoad + KeepAlive`，并显式向无 shell 环境的 launchd 注入 `HTTPS_PROXY=http://127.0.0.1:7897`。key 不进入 plist，仍从权限 0600 的 `~/.jev.env` 读取。
+生产路径是 Codex/ChatGPT.app → Codex Router `127.0.0.1:4202` → generic provider → 本服务 `127.0.0.1:4319` → caller edge → ChatGPT Codex。安装器生成 `~/Library/LaunchAgents/com.jev.codex-jev-router.plist`，设置 `RunAtLoad + KeepAlive`；另生成 `com.jev.codex-router-loopback-env.plist`，让 GUI launchd 环境长期绕过本机代理访问 4202/4319。Jev key 不进入 plist，仍从权限 0600 的 `~/.jev.env` 读取。
 
 ```bash
 cd <home>/development/Jev/codex-jev-router
@@ -69,14 +71,14 @@ scripts/install-service.sh
 scripts/enable.sh
 ```
 
-`enable.sh` 先要求 `/health` 同时返回 `ok=true`、`jev_key=true`，再保存带时间戳的完整 `~/.codex/config.toml` 备份、建立 shadow 哨兵，最后切 provider；重复运行不会增加恢复点。恢复时运行：
+安装 Codex Router 本体前应先备份 `~/.codex/config.toml`；本机的原始恢复点 SHA-256 记录在接入报告。之后 `enable.sh` 只管理目录条目和 provider 状态。停用时运行：
 
 ```bash
-scripts/disable.sh                 # 还原配置，服务继续待命
-scripts/disable.sh --stop-service  # 还原后同时停 launchd 服务
+scripts/disable.sh                 # 从 picker 隐藏并 disable provider
+scripts/disable.sh --stop-service  # 同时停 codex-jev-router LaunchAgent
 ```
 
-如果启用后手工改过 Codex 配置，disable 会拒绝静默覆盖，并显示原始备份路径；确认要舍弃后续修改时才使用 `scripts/disable.sh --force`。服务日志在 `~/Library/Logs/codex-jev-router.{out,err}.log`。launchd 不可用时可定期运行 `scripts/watchdog.sh`；它先尝试 kickstart，仍失败才用同样代理环境直接后台启动。
+`enable.sh` 不再改写顶层 `model_provider`：它检查 4202/4319、启用 shared ChatGPT session、幂等注册 provider、合并 `user-models.json`、刷新目录并显示 `jev/auto`。`disable.sh` 也不碰 Codex Router 管理的 `config.toml` 块，并保留 shadow 哨兵。服务日志在 `~/Library/Logs/codex-jev-router.{out,err}.log`。完整安装、升级核查和卸载见 `docs/2026-09-21-CodexRouter接入.md`。
 
 一周 shadow 汇总使用：
 
@@ -127,7 +129,7 @@ requires_openai_auth = true
 ```bash
 ./bin/codex-router chatgpt-session enable
 ./bin/codex-router providers generic add jev \
-  --name "Jev Router" \
+  --name "Codex + Jev Router" \
   --base-url http://127.0.0.1:4319/v1 \
   --adapter openai-responses \
   --allow-private
@@ -146,7 +148,7 @@ requires_openai_auth = true
       "upstreamModel": "auto",
       "provider": "jev",
       "listed": true,
-      "displayName": "Codex + Jev Boundary Router",
+      "displayName": "Codex + Jev Router",
       "description": "Thread-pinned boundary routing by Jev.",
       "priority": 95,
       "defaultEffort": "medium",

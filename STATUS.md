@@ -1,6 +1,6 @@
-# T5 常驻 shadow 状态
+# Codex Router caller edge 常驻 shadow 状态
 
-截至 2026-09-20，`com.jev.codex-jev-router` 已作为当前用户 LaunchAgent 运行，Codex CLI 与 ChatGPT.app 包内 Codex 均真实经过本路由器；`~/.codex/config.toml` 有校验备份并长期保持本地 provider，shadow soak 已开始。GUI 宿主仍需用户完全退出并重开 ChatGPT 后发一条任务完成最后确认。
+截至 2026-09-21，Codex Router 0.6.0 已安装在 4202，`Codex + Jev Router` 作为 `jev/auto` generic provider 出现在 picker；`com.jev.codex-jev-router` 在 4319 常驻并以上游 caller edge 使用共享 ChatGPT session。CLI 全链路已真实通过，shadow soak 继续；GUI 宿主仍需用户完全退出并重开 ChatGPT 后选择该条目、发一条任务完成最后确认。
 
 ## 当前默认参数
 
@@ -39,7 +39,7 @@
 - 完成子 agent 委托提取、独立 Jev 上下文和父子链日志；子线程不无条件继承父模型。
 - 完成 per-thread 决策锁和默认 24 小时状态 TTL/保守 GC；状态过期时同步保守回收空闲锁。
 - 完成 T2 原始上游流捕获和缺 completed 根因修复；客户端断开后继续排空上游，同任务 6 次、127 请求缺失率为 0。
-- 完成 131 项离线单元测试，覆盖委托提取、协调 hint、子线程独立决策、同线程并发只决策一次、GC、后台状态刷新、HTTP 资源边界、跨块上游首块嗅探、真实压缩 fixture、Jev 重试/熔断、SSE 异常生命周期、原始流捕获、断开后排空、长父线程、调参基准与 T5 配置/服务/周报工具。
+- 完成 136 项离线单元测试，覆盖委托提取、协调 hint、caller-edge 身份兼容、子线程独立决策、同线程并发只决策一次、GC、后台状态刷新、HTTP 资源边界、跨块上游首块嗅探、真实压缩 fixture、Jev 重试/熔断、SSE 异常生命周期、原始流捕获、断开后排空、长父线程、调参基准与安装工具。
 - 修复评审 A1–A5、B1、B2、B5、B8、B9：包括已发 SSE 头后禁止二次响应、同模型 effort 成本、更可靠的 usage 兜底、非流式缺 completed 返回 502、key loader fail-open 与上游连接回收。详见 `docs/2026-09-20-评审修复.md`。
 - 修复常驻相关 B3、B6、B7：状态后台合并刷新；请求体/socket/并发上限；200 无 Content-Type 的响应按首块区分 SSE 与 JSON。
 - 用真实 Jev key 完成 shadow 与真路由对照；`response.completed.model` 证明 luna/astra 实际切换，详见 `docs/2026-09-19-真实Jev端到端.md`。
@@ -53,6 +53,11 @@
 - 完成 T5 launchd 安装：`RunAtLoad + KeepAlive`、显式 7897 HTTPS 代理、health/key 门禁、幂等 enable/disable、哈希保护的一键还原与 watchdog 回退。
 - 完成 T5 CLI 实流量：系统 Codex 0.155.1 和 ChatGPT.app 内置 Codex 0.155.0-alpha.9.2 都识别 `provider=codex-jev-router`，日志 `gate=apply`、`shadow=true`，上游 completed model 为 astra。
 - 增加按日 shadow 周报：根会话/线程、决策、would/置信度、低置信回退、Jev 错误/延迟、固定轨迹费用估算和 usage 缺失均可审计。
+- 安装 Codex Router 0.6.0，启用 shared ChatGPT session 与 caller edge；原始 Codex 配置备份 SHA-256 为 `5cbb7dc4…1a83`。
+- 注册 generic provider `jev`，幂等发布 `jev/auto` 目录条目并在 picker 显示 **Codex + Jev Router**；enable/disable 已改为 provider/picker 生命周期，不再切顶层 `model_provider`。
+- 完成 4202 → 4319 → caller edge → ChatGPT Codex 的真实 CLI 验收：Jev `gate=apply`/would luna，shadow 实际 `response.completed.model=gpt-6-astra`。
+- 修复 Codex Router generic 路径删除 thread headers/`client_metadata` 导致的 `missing_thread_id`：仅在正式标识全缺时，以 prompt cache 根键 + NEW_TASK message id 组成父子线程兼容键。
+- 增加 GUI launchd 的持久 `NO_PROXY=localhost,127.0.0.1,::1`，避免本机回环流量进入 7897 出网代理。
 
 ## 本阶段未做
 
@@ -60,11 +65,12 @@
 - 未实现 UI reasoning summary 标记。
 - `SummaryMarker` 仅保留了关闭的配置位，尚未向 SSE 插入可见路由标记。
 - 真实 Jev 基准目前只覆盖 8 个单 agent 任务和 4 个 fan-out 任务、每格 3 次；T3/T4 虽增加了参数重复实验，仍没有覆盖多仓库、多语言、长任务或人工质量评分。
-- 未在本机安装 Codex Router，因此 caller edge 仅有协议/路径单测，真实端到端使用直连模式。
+- 尚未由用户在 ChatGPT.app GUI 中完成 `⌘Q` 重启、选择 **Codex + Jev Router** 并发一条实际任务；包内 CLI 与系统 CLI 均不能冒充这一步。
 
 ## 已知问题
 
 - Codex 的私有 header 和 `x-codex-turn-metadata` 不是稳定公开协议；升级 Codex CLI 后应重跑线程标识与子 agent fixture 验证。
+- Codex Router 0.6.0 的 generic 路径不转发上述私有标识，并删除 `client_metadata`；兼容层依赖 `prompt_cache_key` 和 message id。升级 Codex Router 后必须重跑 root/child 身份和 caller-edge smoke test。
 - Codex CLI 0.155.1 在子线程 `NEW_TASK` 和父线程 `spawn_agent` arguments 中都将具体委托 payload 加密；当前只能以 agent name 加父任务上下文分档，无语义名称会降低准确性。
 - 历史 fan-out 基准中 live 的 18 条缺 `response.completed` 已定位为客户端断开后路由器过早关上游；修复后验证缺失率为 0，但历史报告的费用仍应按下界解读。
 - T1 的 1,466 个有效请求中仍有 1 条未开 raw debug 时的 completed 缺失；已标记为费用下界，说明仍需保留缺失可观测性。
@@ -76,7 +82,8 @@
 - 客户端 `accept-encoding` 尚未显式剥离（B10）；未来客户端若请求 gzip，上游流解析可能失效。
 - 协调 hint 依赖明确的“子 agent + 并行派发 + 等待汇总”措辞；隐式协调任务仍可能漏判。s2 只有 3 个有效样本，尚不能代表所有 fan-out 协调任务。
 - 后台状态刷新已覆盖单测与正常退出，但尚未做进程崩溃、磁盘满恢复和数万线程长跑测试。
-- 桌面 App 包内 Codex 已验证，但 GUI 宿主是否在完全重启后读取同一 provider 仍待用户发一条实际任务确认；不能用包内 CLI 结果冒充 GUI 验收。
+- 桌面 App 包内 Codex 已用新 `jev/auto` caller-edge 入口真实返回，日志为 apply/shadow/completed astra；GUI 宿主是否在完全重启后选择并使用该条目仍待用户发一条实际任务确认。
+- shared ChatGPT session 具有过期时间；本次检查约剩 96 小时，过期时需重新运行 `chatgpt-session enable`。
 - 决策日志尚无轮转/保留策略；一周 soak 期间需观察体积，报告脚本不会删除原始日志。
 
 ## T5 soak 与后续工作
@@ -85,5 +92,5 @@
 2. 增加状态 schema 版本告警/迁移（B4），并为决策日志与 raw stream 提供轮转和保留策略。
 3. 显式剥离或处理 `accept-encoding`（B10），增加可选本地鉴权（B11）。
 4. 做进程崩溃、磁盘满恢复、并发峰值、数万线程状态增长和日志轮转的长期故障注入。
-5. 在安装 Codex Router 的机器上做 caller edge 真实验收，验证 caller secret、shared session、目录刷新和服务托管。
+5. 用户完成 ChatGPT.app GUI 选择与日志验收；一周后运行 `scripts/shadow-report.py --days 7`。
 6. 扩大人工质量样本，覆盖隐式协调、嵌套/fork 子 agent、多仓库、多语言和高风险任务；每次升级 Codex CLI 重放压缩与子线程真实 fixture。

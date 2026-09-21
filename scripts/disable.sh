@@ -1,33 +1,27 @@
 #!/bin/zsh
-# Restore the pre-router Codex config and optionally stop the service.
+# Hide/disable the Codex Router catalog route; Codex config remains managed.
 set -euo pipefail
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+CODEX_ROUTER_HOME="${CODEX_ROUTER_HOME:-<home>/development/Jev/codex-router}"
+CR_BIN="$CODEX_ROUTER_HOME/bin/codex-router"
 LABEL="com.jev.codex-jev-router"
-CONFIG_PATH="$HOME/.codex/config.toml"
-STATE_PATH="$REPO/runtime/service/enable-state.json"
-SHADOW_PATH="$HOME/.codex/codex-jev-router/router.shadow"
 STOP_SERVICE=0
-FORCE=0
 
 for argument in "$@"; do
   case "$argument" in
     --stop-service) STOP_SERVICE=1 ;;
-    --force) FORCE=1 ;;
-    *) print -u2 "usage: $0 [--stop-service] [--force]"; exit 2 ;;
+    *) print -u2 "usage: $0 [--stop-service]"; exit 2 ;;
   esac
 done
 
-if (( FORCE )); then
-  python3 "$REPO/scripts/configure_codex.py" restore \
-    --config "$CONFIG_PATH" --state "$STATE_PATH" --force
-else
-  python3 "$REPO/scripts/configure_codex.py" restore \
-    --config "$CONFIG_PATH" --state "$STATE_PATH"
+if [[ -x "$CR_BIN" ]]; then
+  "$CR_BIN" control picker set jev/auto hide 2>/dev/null || true
+  "$CR_BIN" providers generic disable jev 2>/dev/null || true
 fi
-rm -f "$SHADOW_PATH"
 
 if (( STOP_SERVICE )); then
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 fi
-print "Codex config restored; shadow sentinel removed"
+
+print "Codex + Jev Router is hidden and provider jev is disabled"
+print "shadow sentinel was preserved"

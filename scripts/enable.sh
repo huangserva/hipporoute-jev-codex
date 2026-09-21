@@ -1,33 +1,67 @@
 #!/bin/zsh
-# Health-first, reversible switch of Codex to the local shadow router.
+# Publish the Jev provider in Codex Router without changing Codex's provider.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-HEALTH_URL="http://127.0.0.1:4319/health"
-CONFIG_PATH="$HOME/.codex/config.toml"
-STATE_PATH="$REPO/runtime/service/enable-state.json"
+CODEX_ROUTER_HOME="${CODEX_ROUTER_HOME:-<home>/development/Jev/codex-router}"
+CR_BIN="$CODEX_ROUTER_HOME/bin/codex-router"
+CODEX_ROUTER_HEALTH="http://127.0.0.1:4202/health"
+JEV_ROUTER_HEALTH="http://127.0.0.1:4319/health"
 SHADOW_PATH="$HOME/.codex/codex-jev-router/router.shadow"
+USER_MODELS="$HOME/.codex/codex-router/user-models.json"
 
-check_health() {
-  curl --noproxy 127.0.0.1 -fsS --max-time 2 "$HEALTH_URL" 2>/dev/null \
+check_codex_router_health() {
+  curl --noproxy 127.0.0.1 -fsS --max-time 2 "$CODEX_ROUTER_HEALTH" >/dev/null 2>&1
+}
+
+check_jev_router_health() {
+  curl --noproxy 127.0.0.1 -fsS --max-time 2 "$JEV_ROUTER_HEALTH" 2>/dev/null \
     | grep -q '"jev_key":true'
 }
 
-if ! check_health; then
-  "$REPO/scripts/install-service.sh"
+[[ -x "$CR_BIN" ]] || {
+  print -u2 "Codex Router not found: $CR_BIN"
+  exit 1
+}
+
+if ! check_codex_router_health; then
+  "$CR_BIN" start
 fi
-if ! check_health; then
-  print -u2 "router health check failed; Codex config was not changed"
+if ! check_codex_router_health; then
+  print -u2 "Codex Router health check failed; provider was not published"
   exit 1
 fi
 
-mkdir -p "$(dirname "$STATE_PATH")" "$(dirname "$SHADOW_PATH")" "$HOME/.codex"
-touch "$SHADOW_PATH"
-python3 "$REPO/scripts/configure_codex.py" enable \
-  --config "$CONFIG_PATH" \
-  --state "$STATE_PATH" \
-  --backup-dir "$HOME/.codex"
+if ! check_jev_router_health; then
+  "$REPO/scripts/install-service.sh"
+fi
+if ! check_jev_router_health; then
+  print -u2 "codex-jev-router health/key check failed; provider was not published"
+  exit 1
+fi
 
-print "shadow routing enabled"
-print "health: $HEALTH_URL"
-print "restore: $REPO/scripts/disable.sh"
+mkdir -p "$(dirname "$SHADOW_PATH")"
+touch "$SHADOW_PATH"
+
+"$CR_BIN" chatgpt-session enable
+if "$CR_BIN" providers generic list --json | grep -q '"id": "jev"'; then
+  "$CR_BIN" providers generic edit jev \
+    --name "Codex + Jev Router" \
+    --base-url http://127.0.0.1:4319/v1 \
+    --adapter openai-responses \
+    --allow-private
+else
+  "$CR_BIN" providers generic add jev \
+    --name "Codex + Jev Router" \
+    --base-url http://127.0.0.1:4319/v1 \
+    --adapter openai-responses \
+    --allow-private
+fi
+"$CR_BIN" providers generic enable jev
+python3 "$REPO/scripts/codex_router_catalog.py" "$USER_MODELS"
+"$CR_BIN" refresh-catalog
+"$CR_BIN" control picker set jev/auto show
+
+print "Codex + Jev Router published in shadow mode"
+print "Fully quit and reopen ChatGPT.app, then select: Codex + Jev Router"
+print "disable: $REPO/scripts/disable.sh"

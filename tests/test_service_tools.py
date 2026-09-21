@@ -100,20 +100,43 @@ class ServiceScriptTests(unittest.TestCase):
             self.assertIn(required, script)
         self.assertNotIn("TYPESAFE_API_KEY", script)
 
-    def test_enable_checks_health_and_enables_shadow_before_config(self):
-        script = self._script("enable.sh")
-        health = script.index("check_health")
-        shadow = script.index('touch "$SHADOW_PATH"')
-        configure = script.index("configure_codex.py\" enable")
-        self.assertLess(health, shadow)
-        self.assertLess(shadow, configure)
-        self.assertIn("install-service.sh", script)
+    def test_service_uses_caller_edge_config_without_embedding_secret(self):
+        config = (ROOT / "config.service.toml").read_text(encoding="utf-8")
+        installer = self._script("install-service.sh")
+        self.assertIn('mode = "caller_edge"', config)
+        self.assertIn('caller_edge_url = "http://127.0.0.1:4202"', config)
+        self.assertIn('caller_secret_path = "~/.codex/codex-router/caller-secret"', config)
+        self.assertNotIn("/_codex-router/", config)
+        self.assertIn("--config", installer)
+        self.assertIn("config.service.toml", installer)
 
-    def test_disable_restores_then_removes_shadow_and_optionally_stops(self):
+    def test_install_service_persists_gui_loopback_proxy_bypass(self):
+        script = self._script("install-service.sh")
+        self.assertIn("com.jev.codex-router-loopback-env", script)
+        self.assertIn("launchctl", script)
+        self.assertIn("setenv", script)
+        self.assertIn("localhost,127.0.0.1,::1", script)
+
+    def test_enable_checks_both_services_before_publishing_picker_entry(self):
+        script = self._script("enable.sh")
+        router_health = script.index("check_codex_router_health")
+        jev_health = script.index("check_jev_router_health")
+        shadow = script.index('touch "$SHADOW_PATH"')
+        provider = script.index("providers generic")
+        picker = script.index("picker set jev/auto show")
+        self.assertLess(router_health, shadow)
+        self.assertLess(jev_health, shadow)
+        self.assertLess(shadow, provider)
+        self.assertLess(provider, picker)
+        self.assertIn("install-service.sh", script)
+        self.assertNotIn("configure_codex.py", script)
+
+    def test_disable_hides_picker_and_disables_provider_without_editing_codex_config(self):
         script = self._script("disable.sh")
-        restore = script.index("configure_codex.py\" restore")
-        remove_shadow = script.index('rm -f "$SHADOW_PATH"')
-        self.assertLess(restore, remove_shadow)
+        self.assertIn("picker set jev/auto hide", script)
+        self.assertIn("providers generic disable jev", script)
+        self.assertNotIn("configure_codex.py", script)
+        self.assertNotIn('rm -f "$SHADOW_PATH"', script)
         self.assertIn("--stop-service", script)
         self.assertIn("launchctl bootout", script)
 
@@ -124,6 +147,37 @@ class ServiceScriptTests(unittest.TestCase):
         self.assertIn("nohup", script)
         self.assertIn("HTTPS_PROXY=http://127.0.0.1:7897", script)
         self.assertNotIn("TYPESAFE_API_KEY", script)
+
+
+class CodexRouterCatalogTests(unittest.TestCase):
+    def setUp(self):
+        self.module = load_script("codex_router_catalog", "codex_router_catalog.py")
+
+    def test_upsert_preserves_other_models_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "user-models.json"
+            path.write_text(
+                json.dumps({"version": 1, "models": [{"slug": "other/model", "listed": True}]}),
+                encoding="utf-8",
+            )
+
+            self.module.upsert(path)
+            first = path.read_text(encoding="utf-8")
+            self.module.upsert(path)
+            second = path.read_text(encoding="utf-8")
+
+            document = json.loads(second)
+            self.assertEqual(first, second)
+            self.assertEqual([item["slug"] for item in document["models"]], ["other/model", "jev/auto"])
+            route = document["models"][-1]
+            self.assertEqual(route["gatewayModel"], "jev-auto")
+            self.assertEqual(route["upstreamModel"], "auto")
+            self.assertEqual(route["provider"], "jev")
+            self.assertEqual(route["displayName"], "Codex + Jev Router")
+            self.assertEqual(
+                [item["effort"] for item in route["reasoningLevels"]],
+                ["low", "medium", "high", "xhigh", "max"],
+            )
 
 
 class ShadowReportTests(unittest.TestCase):
