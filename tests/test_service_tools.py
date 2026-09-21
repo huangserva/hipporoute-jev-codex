@@ -4,6 +4,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -93,7 +94,7 @@ class ServiceScriptTests(unittest.TestCase):
             "codex-jev-router.out.log",
             "codex-jev-router.err.log",
             "HTTPS_PROXY",
-            "http://127.0.0.1:7897",
+            "JEV_ROUTER_HTTPS_PROXY",
             "NO_PROXY",
             '"jev_key":true',
         ):
@@ -101,7 +102,7 @@ class ServiceScriptTests(unittest.TestCase):
         self.assertNotIn("TYPESAFE_API_KEY", script)
 
     def test_service_uses_caller_edge_config_without_embedding_secret(self):
-        config = (ROOT / "config.service.toml").read_text(encoding="utf-8")
+        config = (ROOT / "config.service.example.toml").read_text(encoding="utf-8")
         installer = self._script("install-service.sh")
         self.assertIn('mode = "caller_edge"', config)
         self.assertIn('caller_edge_url = "http://127.0.0.1:4202"', config)
@@ -109,6 +110,7 @@ class ServiceScriptTests(unittest.TestCase):
         self.assertNotIn("/_codex-router/", config)
         self.assertIn("--config", installer)
         self.assertIn("config.service.toml", installer)
+        self.assertIn("config.service.example.toml", installer)
 
     def test_install_service_persists_gui_loopback_proxy_bypass(self):
         script = self._script("install-service.sh")
@@ -145,8 +147,17 @@ class ServiceScriptTests(unittest.TestCase):
         self.assertIn("/health", script)
         self.assertIn("launchctl kickstart -k", script)
         self.assertIn("nohup", script)
-        self.assertIn("HTTPS_PROXY=http://127.0.0.1:7897", script)
+        self.assertIn("JEV_ROUTER_HTTPS_PROXY", script)
+        self.assertNotIn("127.0.0.1:7897", script)
         self.assertNotIn("TYPESAFE_API_KEY", script)
+
+    def test_codex_router_scripts_have_no_author_home_path(self):
+        for name in ("enable.sh", "disable.sh", "install-service.sh", "watchdog.sh"):
+            with self.subTest(name=name):
+                script = self._script(name)
+                self.assertNotIn("/Users/", script)
+                if name in ("enable.sh", "disable.sh"):
+                    self.assertIn("CODEX_ROUTER_HOME", script)
 
 
 class CodexRouterCatalogTests(unittest.TestCase):
@@ -181,8 +192,10 @@ class CodexRouterCatalogTests(unittest.TestCase):
 
 
 class ShadowReportTests(unittest.TestCase):
+    def setUp(self):
+        self.module = load_script("shadow_report", "shadow-report.py")
+
     def test_daily_report_groups_roots_reprices_usage_and_marks_missing(self):
-        module = load_script("shadow_report", "shadow-report.py")
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "decisions.jsonl"
             rows = [
@@ -254,7 +267,7 @@ class ShadowReportTests(unittest.TestCase):
             ]
             path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
-            report = module.build_report([path])
+            report = self.module.build_report([path])
             day = report["days"]["2026-09-20"]
 
             self.assertEqual(day["sessions"], 2)
@@ -271,6 +284,48 @@ class ShadowReportTests(unittest.TestCase):
             self.assertEqual(day["usage_rows_missing"], 1)
             self.assertGreater(day["actual_cost_usd"], day["would_cost_usd"])
             self.assertGreater(day["projected_savings_usd"], 0)
+
+    def test_since_filters_rows_before_session_and_cost_aggregation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "decisions.jsonl"
+            rows = [
+                {"at": "2026-09-21T07:00:00+0800", "thread_id": "old", "event": "first_request"},
+                {"at": "2026-09-21T09:00:00+0800", "thread_id": "new", "event": "first_request"},
+            ]
+            path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+            report = self.module.build_report(
+                [path],
+                since=datetime.fromisoformat("2026-09-21T08:00:00+08:00"),
+            )
+
+        day = report["days"]["2026-09-21"]
+        self.assertEqual(report["rows"], 1)
+        self.assertEqual(day["sessions"], 1)
+        self.assertEqual(day["requests"], 1)
+
+    def test_hours_uses_supplied_now_and_iso_z_is_supported(self):
+        now = datetime(2026, 9, 21, 12, 0, tzinfo=timezone.utc)
+
+        since, day_cutoff = self.module.resolve_filters(
+            since_text=None,
+            hours=3,
+            days=None,
+            now=now,
+        )
+        parsed = self.module.parse_iso_timestamp("2026-09-21T08:30:00Z")
+
+        self.assertEqual(since, datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc))
+        self.assertIsNone(day_cutoff)
+        self.assertEqual(parsed, datetime(2026, 9, 21, 8, 30, tzinfo=timezone.utc))
+
+    def test_time_window_options_are_positive_and_mutually_exclusive(self):
+        with self.assertRaisesRegex(ValueError, "only one"):
+            self.module.resolve_filters(since_text="2026-09-21T08:00:00Z", hours=3, days=None)
+        with self.assertRaisesRegex(ValueError, "positive"):
+            self.module.resolve_filters(since_text=None, hours=0, days=None)
+        with self.assertRaisesRegex(ValueError, "only one"):
+            self.module.resolve_filters(since_text=None, hours=3, days=1)
 
 if __name__ == "__main__":
     unittest.main()

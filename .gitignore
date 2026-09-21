@@ -10,6 +10,9 @@ decisions.jsonl
 
 # Local experiment configuration and backups.
 config.local.toml
+config.service.toml
 config.e2e.toml
 config.toml.backup-*
+*.backup
+*.bak
 codex-*.log

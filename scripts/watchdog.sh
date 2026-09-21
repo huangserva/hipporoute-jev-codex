@@ -6,6 +6,8 @@ LABEL="com.jev.codex-jev-router"
 HEALTH_URL="http://127.0.0.1:4319/health"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LOG="$HOME/Library/Logs/codex-jev-router.watchdog.log"
+JEV_ROUTER_HTTPS_PROXY="${JEV_ROUTER_HTTPS_PROXY:-${HTTPS_PROXY:-${https_proxy:-}}}"
+JEV_ROUTER_HTTP_PROXY="${JEV_ROUTER_HTTP_PROXY:-${HTTP_PROXY:-${http_proxy:-$JEV_ROUTER_HTTPS_PROXY}}}"
 healthy() {
   curl --noproxy 127.0.0.1 -fsS --max-time 3 "$HEALTH_URL" >/dev/null 2>&1
 }
@@ -21,8 +23,8 @@ fi
 
 # Fallback for a machine where the user launchd domain is unavailable.
 cd "$REPO"
-HTTPS_PROXY=http://127.0.0.1:7897 \
-HTTP_PROXY=http://127.0.0.1:7897 \
+HTTPS_PROXY="$JEV_ROUTER_HTTPS_PROXY" \
+HTTP_PROXY="$JEV_ROUTER_HTTP_PROXY" \
 NO_PROXY=127.0.0.1,localhost \
 nohup python3 -m codex_jev_router >> "$LOG" 2>&1 &
 sleep 2

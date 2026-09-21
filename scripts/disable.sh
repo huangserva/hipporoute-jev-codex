@@ -2,8 +2,16 @@
 # Hide/disable the Codex Router catalog route; Codex config remains managed.
 set -euo pipefail
 
-CODEX_ROUTER_HOME="${CODEX_ROUTER_HOME:-<home>/development/Jev/codex-router}"
-CR_BIN="$CODEX_ROUTER_HOME/bin/codex-router"
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ -n "${CODEX_ROUTER_HOME:-}" ]]; then
+  CR_BIN="$CODEX_ROUTER_HOME/bin/codex-router"
+elif [[ -x "$REPO/../codex-router/bin/codex-router" ]]; then
+  CR_BIN="$REPO/../codex-router/bin/codex-router"
+elif command -v codex-router >/dev/null 2>&1; then
+  CR_BIN="$(command -v codex-router)"
+else
+  CR_BIN=""
+fi
 LABEL="com.jev.codex-jev-router"
 STOP_SERVICE=0
 

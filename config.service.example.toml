@@ -1,3 +1,5 @@
+# Copy this file to config.service.toml before installing the launchd service.
+# This example uses Codex Router's caller edge and contains no credentials.
 [server]
 host = "127.0.0.1"
 port = 4319
@@ -21,6 +23,8 @@ stream_debug = "~/.codex/codex-jev-router/stream.debug"
 raw_stream_dir = "~/.codex/codex-jev-router/raw-streams"
 
 [jev]
+# Optional third key source after TYPESAFE_API_KEY and before ~/.jev.env.
+# key_file = "~/.config/codex-jev-router/jev.env"
 url = "https://api.typesafe.ai/v1/systemone"
 model = "jev-latest"
 timeout_seconds = 4

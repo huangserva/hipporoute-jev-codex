@@ -3,8 +3,16 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CODEX_ROUTER_HOME="${CODEX_ROUTER_HOME:-<home>/development/Jev/codex-router}"
-CR_BIN="$CODEX_ROUTER_HOME/bin/codex-router"
+if [[ -n "${CODEX_ROUTER_HOME:-}" ]]; then
+  CR_BIN="$CODEX_ROUTER_HOME/bin/codex-router"
+elif [[ -x "$REPO/../codex-router/bin/codex-router" ]]; then
+  CR_BIN="$REPO/../codex-router/bin/codex-router"
+elif command -v codex-router >/dev/null 2>&1; then
+  CR_BIN="$(command -v codex-router)"
+else
+  print -u2 "Codex Router not found; set CODEX_ROUTER_HOME or add codex-router to PATH"
+  exit 1
+fi
 CODEX_ROUTER_HEALTH="http://127.0.0.1:4202/health"
 JEV_ROUTER_HEALTH="http://127.0.0.1:4319/health"
 SHADOW_PATH="$HOME/.codex/codex-jev-router/router.shadow"
@@ -20,7 +28,7 @@ check_jev_router_health() {
 }
 
 [[ -x "$CR_BIN" ]] || {
-  print -u2 "Codex Router not found: $CR_BIN"
+  print -u2 "Codex Router is not executable: $CR_BIN"
   exit 1
 }
 

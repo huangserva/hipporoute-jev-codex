@@ -8,7 +8,7 @@ import glob
 import json
 import statistics
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -105,8 +105,58 @@ def _root_thread(thread_id: str, parents: dict[str, str]) -> str:
     return current
 
 
-def build_report(paths: Iterable[Path]) -> dict[str, Any]:
+def parse_iso_timestamp(text: str) -> datetime:
+    """Parse an ISO-8601 instant, accepting ``Z`` and local naive values."""
+    normalized = text.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    value = datetime.fromisoformat(normalized)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    return value
+
+
+def resolve_filters(
+    *,
+    since_text: str | None,
+    hours: float | None,
+    days: int | None,
+    now: datetime | None = None,
+) -> tuple[datetime | None, str | None]:
+    selected = sum(value is not None for value in (since_text, hours, days))
+    if selected > 1:
+        raise ValueError("use only one of --since, --hours, or --days")
+    if hours is not None and hours <= 0:
+        raise ValueError("--hours must be positive")
+    if days is not None and days <= 0:
+        raise ValueError("--days must be positive")
+    current = now or datetime.now().astimezone()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    if since_text is not None:
+        return parse_iso_timestamp(since_text), None
+    if hours is not None:
+        return current - timedelta(hours=hours), None
+    if days is not None:
+        return None, (current.date() - timedelta(days=days - 1)).isoformat()
+    return None, None
+
+
+def _at_or_none(row: dict[str, Any]) -> datetime | None:
+    at = row.get("at")
+    if not isinstance(at, str):
+        return None
+    try:
+        return parse_iso_timestamp(at)
+    except ValueError:
+        return None
+
+
+def build_report(paths: Iterable[Path], since: datetime | None = None) -> dict[str, Any]:
+    paths = list(paths)
     rows, malformed = _read_rows(paths)
+    if since is not None:
+        rows = [row for row in rows if (at := _at_or_none(row)) is not None and at >= since]
     parents = {
         str(row["thread_id"]): str(row["parent_thread_id"])
         for row in rows
@@ -197,7 +247,7 @@ def build_report(paths: Iterable[Path]) -> dict[str, Any]:
             "projected_savings_usd": savings,
             "projected_savings_percent": savings / actual_cost * 100 if actual_cost else None,
         }
-    return {"files": len(list(paths)), "rows": len(rows), "malformed_rows": malformed, "days": days}
+    return {"files": len(paths), "rows": len(rows), "malformed_rows": malformed, "days": days}
 
 
 def _format_number(value: Any, digits: int = 1) -> str:
@@ -255,16 +305,23 @@ def main() -> None:
         default=[str(Path("~/.codex/codex-jev-router/decisions.jsonl").expanduser())],
     )
     parser.add_argument("--days", type=int, help="keep only the most recent N local calendar days")
+    parser.add_argument("--hours", type=float, help="keep records from the most recent N hours")
+    parser.add_argument("--since", help="keep records at or after this ISO-8601 timestamp")
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     args = parser.parse_args()
     paths = _expand_inputs(args.paths)
     if not paths:
         parser.error("no decision JSONL files found")
-    report = build_report(paths)
-    if args.days is not None:
-        if args.days <= 0:
-            parser.error("--days must be positive")
-        cutoff = (date.today() - timedelta(days=args.days - 1)).isoformat()
+    try:
+        since, cutoff = resolve_filters(
+            since_text=args.since,
+            hours=args.hours,
+            days=args.days,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    report = build_report(paths, since=since)
+    if cutoff is not None:
         report["days"] = {day: value for day, value in report["days"].items() if day >= cutoff}
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))

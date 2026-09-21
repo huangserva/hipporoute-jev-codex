@@ -11,9 +11,31 @@ ENV_PLIST="$HOME/Library/LaunchAgents/$ENV_LABEL.plist"
 LOG_DIR="$HOME/Library/Logs"
 DOMAIN="gui/$(id -u)"
 HEALTH_URL="http://127.0.0.1:4319/health"
+SERVICE_CONFIG="${JEV_ROUTER_CONFIG:-$REPO/config.service.toml}"
+JEV_ROUTER_HTTPS_PROXY="${JEV_ROUTER_HTTPS_PROXY:-${HTTPS_PROXY:-${https_proxy:-}}}"
+JEV_ROUTER_HTTP_PROXY="${JEV_ROUTER_HTTP_PROXY:-${HTTP_PROXY:-${http_proxy:-$JEV_ROUTER_HTTPS_PROXY}}}"
 
 [[ -x "$PYTHON_BIN" ]] || { print -u2 "python3 not found"; exit 1; }
 mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR"
+
+if [[ ! -f "$SERVICE_CONFIG" ]]; then
+  cp "$REPO/config.service.example.toml" "$SERVICE_CONFIG"
+  chmod 600 "$SERVICE_CONFIG"
+  print "created local service config: $SERVICE_CONFIG"
+fi
+
+case "$JEV_ROUTER_HTTPS_PROXY$JEV_ROUTER_HTTP_PROXY" in
+  *[\<\>\&]*) print -u2 "proxy URL contains unsupported XML characters"; exit 2 ;;
+esac
+PROXY_XML=""
+if [[ -n "$JEV_ROUTER_HTTPS_PROXY" ]]; then
+  PROXY_XML="$PROXY_XML
+    <key>HTTPS_PROXY</key><string>$JEV_ROUTER_HTTPS_PROXY</string>"
+fi
+if [[ -n "$JEV_ROUTER_HTTP_PROXY" ]]; then
+  PROXY_XML="$PROXY_XML
+    <key>HTTP_PROXY</key><string>$JEV_ROUTER_HTTP_PROXY</string>"
+fi
 
 # GUI apps inherit launchd's environment, not an interactive shell's NO_PROXY.
 # Persist the loopback bypass so ChatGPT.app never sends ports 4202/4319 to the
@@ -53,7 +75,7 @@ cat > "$PLIST" <<EOF
     <string>-m</string>
     <string>codex_jev_router</string>
     <string>--config</string>
-    <string>$REPO/config.service.toml</string>
+    <string>$SERVICE_CONFIG</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>RunAtLoad</key><true/>
@@ -64,8 +86,7 @@ cat > "$PLIST" <<EOF
     <key>HOME</key><string>$HOME</string>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>PYTHONUNBUFFERED</key><string>1</string>
-    <key>HTTPS_PROXY</key><string>http://127.0.0.1:7897</string>
-    <key>HTTP_PROXY</key><string>http://127.0.0.1:7897</string>
+    $PROXY_XML
     <key>NO_PROXY</key><string>127.0.0.1,localhost</string>
   </dict>
   <key>StandardOutPath</key><string>$LOG_DIR/codex-jev-router.out.log</string>
