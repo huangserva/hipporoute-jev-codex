@@ -1,8 +1,8 @@
 # Third-party notices
 
-This project is informed by and contains adapted implementation ideas from
-`jev-codex-router`, particularly around SSE forwarding and caller-edge handling.
-That project is distributed under the MIT License:
+HippoRoute-Jev-Codex is informed by and contains adapted implementation ideas
+from `jev-codex-router`, particularly around SSE forwarding and caller-edge
+handling. That project is distributed under the MIT License:
 
 > MIT License
 >

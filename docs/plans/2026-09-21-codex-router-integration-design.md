@@ -2,13 +2,13 @@
 
 ## 目标
 
-在不改参考仓库源码、不复制任何凭据的前提下，把 Codex Router 安装为本机 4202 网关，把 codex-jev-router 注册为 `openai-responses` generic provider，并发布 `jev/auto` 到 Codex/ChatGPT App 模型目录。Jev 路由器继续 shadow，真实上游改由 caller edge 使用现有 ChatGPT 登录态。
+在不改参考仓库源码、不复制任何凭据的前提下，把 Codex Router 安装为本机 4202 网关，把 HippoRoute-Jev-Codex 注册为 `openai-responses` generic provider，并发布 `jev/auto` 到 Codex/ChatGPT App 模型目录。Jev 路由器继续 shadow，真实上游改由 caller edge 使用现有 ChatGPT 登录态。
 
 ## 安装与数据边界
 
 Codex Router 使用无 provider、无 discovery 的 idle 安装，避免探测第三方凭据；安装器仍负责 Node/Python 依赖、launchd 服务、caller capability、原生目录和 `~/.codex/config.toml` 的两个 managed block。managed block、`generic-providers.json` 和 caller secret 只通过 Router CLI 操作，不手改。`user-models.json` 是文档允许的手工状态文件，更新时保留所有既有条目并原子写入。
 
-codex-jev-router 增加一份无 secret 的常驻配置，`upstream.mode=caller_edge`、base URL 为 `http://127.0.0.1:4202`、secret 路径为 `~/.codex/codex-router/caller-secret`。现有代码在运行时拼出 `/_codex-router/<secret>/v1`；plist 只增加 `--config`，不会包含 capability。shadow 哨兵继续位于 `~/.codex/codex-jev-router/router.shadow`。
+HippoRoute-Jev-Codex 增加一份无 secret 的常驻配置，`upstream.mode=caller_edge`、base URL 为 `http://127.0.0.1:4202`、secret 路径为 `~/.codex/codex-router/caller-secret`。现有代码在运行时拼出 `/_codex-router/<secret>/v1`；plist 只增加 `--config`，不会包含 capability。shadow 哨兵继续位于 `~/.codex/hipporoute/router.shadow`。
 
 ## 启停语义
 

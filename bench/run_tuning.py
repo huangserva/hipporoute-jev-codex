@@ -210,7 +210,7 @@ def _stop_router(process: subprocess.Popen | None) -> None:
 
 def _start_router(config_path: Path, port: int, server_log) -> subprocess.Popen:
     process = subprocess.Popen(
-        [sys.executable, "-u", "-m", "codex_jev_router", "--config", str(config_path)],
+        [sys.executable, "-u", "-m", "hipporoute", "--config", str(config_path)],
         cwd=ROOT,
         stdout=server_log,
         stderr=subprocess.STDOUT,

@@ -11,11 +11,11 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
-from codex_jev_router.config import load_config
-from codex_jev_router.server import RouterHandler, _read_chunked, build_app, make_server
-from codex_jev_router.server import relay_sse_response
-from codex_jev_router.sse import SSEUsageTracker
-from codex_jev_router.stream_debug import RawStreamCapture
+from hipporoute.config import load_config
+from hipporoute.server import RouterHandler, _read_chunked, build_app, make_server
+from hipporoute.server import relay_sse_response
+from hipporoute.sse import SSEUsageTracker
+from hipporoute.stream_debug import RawStreamCapture
 
 
 OUTPUT_ITEM = {

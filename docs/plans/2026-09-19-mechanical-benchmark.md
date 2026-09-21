@@ -12,7 +12,7 @@
 
 ### Task 1: Persist Jev confidence
 
-**Files:** modify `codex_jev_router/engine.py`, `codex_jev_router/server.py`; test `tests/test_engine.py`, `tests/test_server.py`.
+**Files:** modify `hipporoute/engine.py`, `hipporoute/server.py`; test `tests/test_engine.py`, `tests/test_server.py`.
 
 1. Add a failing test asserting a successful fake Jev response appears in `Decision.jev` with tier/depth choices and confidences.
 2. Run the focused test and verify the missing field failure.

@@ -2,7 +2,7 @@
 
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Install codex-jev-router as a persistent launchd shadow service with safe Codex configuration enable/disable scripts and a one-week shadow report.
+**Goal:** Install HippoRoute-Jev-Codex as a persistent launchd shadow service with safe Codex configuration enable/disable scripts and a one-week shadow report.
 
 **Architecture:** launchd owns the router process and explicit proxy environment. A small standard-library Python helper performs reversible, hash-guarded config changes, while shell entrypoints orchestrate health-first enable and reverse-order disable. A separate Python analyzer aggregates redacted decision JSONL without contacting external services.
 
@@ -55,7 +55,7 @@
 - Modify: `README.md`
 - Modify: `STATUS.md`
 - Create: `docs/experiments/2026-09-21-T5-安装.md`
-- Create at runtime: `~/Library/LaunchAgents/com.jev.codex-jev-router.plist`
+- Create at runtime: `~/Library/LaunchAgents/com.hippo.hipporoute.plist`
 - Modify with backup retained: `~/.codex/config.toml`
 
 1. Document install, GUI verification, emergency operations, reporting semantics and limitations.

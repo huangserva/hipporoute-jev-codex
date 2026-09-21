@@ -182,7 +182,7 @@ class PersistenceTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 with temporary_codex_config(path, backup, "http://127.0.0.1:4319/v1"):
                     changed = path.read_text(encoding="utf-8")
-                    self.assertIn('model_provider = "codex-jev-router-bench"', changed)
+                    self.assertIn('model_provider = "hipporoute-bench"', changed)
                     raise RuntimeError("stop")
             self.assertEqual(path.read_text(encoding="utf-8"), original)
             self.assertEqual(backup.read_text(encoding="utf-8"), original)

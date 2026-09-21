@@ -302,7 +302,7 @@ def main() -> None:
     parser.add_argument(
         "paths",
         nargs="*",
-        default=[str(Path("~/.codex/codex-jev-router/decisions.jsonl").expanduser())],
+        default=[str(Path("~/.codex/hipporoute/decisions.jsonl").expanduser())],
     )
     parser.add_argument("--days", type=int, help="keep only the most recent N local calendar days")
     parser.add_argument("--hours", type=float, help="keep records from the most recent N hours")

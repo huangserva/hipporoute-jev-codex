@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from codex_jev_router.stream_debug import RawStreamCapture
+from hipporoute.stream_debug import RawStreamCapture
 
 
 class RawStreamCaptureTests(unittest.TestCase):

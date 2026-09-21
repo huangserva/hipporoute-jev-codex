@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Any
 
 
-PROVIDER = "codex-jev-router"
+PROVIDER = "hipporoute"
 PROVIDER_HEADER = f"[model_providers.{PROVIDER}]"
 PROVIDER_BLOCK = f'''{PROVIDER_HEADER}
-name = "Codex + Jev Router"
+name = "HippoRoute (Jev)"
 base_url = "http://127.0.0.1:4319/v1"
 wire_api = "responses"
 requires_openai_auth = true
@@ -98,7 +98,7 @@ def enable_config(
     stamp = timestamp or time.strftime("%Y%m%d-%H%M%S")
     destination = (backup_dir or config_path.parent).expanduser()
     destination.mkdir(parents=True, exist_ok=True)
-    backup_path = destination / f"{config_path.name}.backup-codex-jev-router-{stamp}"
+    backup_path = destination / f"{config_path.name}.backup-hipporoute-{stamp}"
     if backup_path.exists():
         raise FileExistsError(backup_path)
     _atomic_write(backup_path, original)

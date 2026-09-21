@@ -9,10 +9,10 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from codex_jev_router.config import load_config
-from codex_jev_router.engine import RouterEngine
-from codex_jev_router.policy import ASTRA, LUNA, SOL, SpawnDelegation
-from codex_jev_router.state import ThreadState, ThreadStateStore
+from hipporoute.config import load_config
+from hipporoute.engine import RouterEngine
+from hipporoute.policy import ASTRA, LUNA, SOL, SpawnDelegation
+from hipporoute.state import ThreadState, ThreadStateStore
 
 
 ROOT = "thread-root"

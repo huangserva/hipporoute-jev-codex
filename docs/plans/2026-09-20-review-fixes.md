@@ -15,7 +15,7 @@
 **Files:**
 - Create: `tests/fixtures/codex-0.155.1-compaction-request.json`
 - Modify: `tests/test_policy.py`, `tests/test_engine.py`
-- Modify: `codex_jev_router/policy.py`
+- Modify: `hipporoute/policy.py`
 
 1. 备份 `~/.codex/config.toml` 并记录 SHA-256；用 gitignored runtime 目录捕获真实请求。
 2. 以低 `auto_compact_token_limit` 驱动真实 `codex exec`，确认压缩请求 header metadata 与任务开头。
@@ -28,7 +28,7 @@
 
 **Files:**
 - Modify: `tests/test_server.py`
-- Modify: `codex_jev_router/server.py`
+- Modify: `hipporoute/server.py`
 
 1. 增加上游中途抛 `IncompleteRead`、状态/日志写失败的 socket 级测试，断言响应字节只出现一个 HTTP 状态行；先确认失败。
 2. 增加 `headers_sent` 状态；发头后异常只记捕获事件、关闭连接，禁止二次 `_json`。
@@ -39,7 +39,7 @@
 
 **Files:**
 - Modify: `tests/test_policy.py`
-- Modify: `codex_jev_router/policy.py`
+- Modify: `hipporoute/policy.py`
 
 1. 把原错误断言改为高上下文同模型 effort 变化允许切换；确认失败。
 2. 同模型时返回允许且零重建成本；确认不同模型分支不变。
@@ -49,7 +49,7 @@
 
 **Files:**
 - Modify: `tests/test_server.py`
-- Modify: `codex_jev_router/server.py`
+- Modify: `hipporoute/server.py`
 
 1. 增加无 completed/usage 流的状态与日志断言；确认旧代码不更新且缺 `context_source`。
 2. 以本请求字符数和配置比例估算，回填线程状态；日志记录 `usage` 或 `estimate`。
@@ -59,7 +59,7 @@
 
 **Files:**
 - Modify: `tests/test_jev.py`, `tests/test_engine.py`, `tests/test_config.py`
-- Modify: `codex_jev_router/jev.py`, `codex_jev_router/engine.py`, `codex_jev_router/config.py`, `config.example.toml`
+- Modify: `hipporoute/jev.py`, `hipporoute/engine.py`, `hipporoute/config.py`, `config.example.toml`
 
 1. 测试 400/401 不重试、429 按封顶后的 Retry-After 重试、5xx/网络异常仍指数退避。
 2. 测试连续 N 次 Jev 失败后 M 秒内不调用 key/Jev，gate 为 `jev_circuit_open`，到期后半开重试。
@@ -70,7 +70,7 @@
 
 **Files:**
 - Modify: `tests/test_server.py`
-- Modify: `codex_jev_router/server.py`
+- Modify: `hipporoute/server.py`
 
 1. 增加非流式请求收到无 completed SSE 的集成测试，断言 502 JSON；确认旧代码失败。
 2. `assemble_sse` 返回 `None` 时生成诊断明确的 502 JSON，保持记录真实上游状态。
@@ -80,7 +80,7 @@
 
 **Files:**
 - Modify: `tests/test_engine.py`, `tests/test_state.py`, `tests/test_upstream.py`, `tests/test_server.py`
-- Modify: `codex_jev_router/engine.py`, `codex_jev_router/state.py`, `codex_jev_router/upstream.py`, `codex_jev_router/server.py`
+- Modify: `hipporoute/engine.py`, `hipporoute/state.py`, `hipporoute/upstream.py`, `hipporoute/server.py`
 
 1. 分别为 B2 key loader 异常、B5 锁 GC、B9 getresponse 失败关连接、B8 非法 Content-Length 写失败测试。
 2. 逐项最小修复并运行定向测试。

@@ -1,4 +1,4 @@
-"""Local HTTP server for the Codex + Jev boundary router."""
+"""Local HTTP server for the HippoRoute-Jev-Codex boundary router."""
 
 from __future__ import annotations
 
@@ -223,7 +223,7 @@ class RouterHTTPServer(ThreadingHTTPServer):
 
 class RouterHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = f"codex-jev-router/{__version__}"
+    server_version = f"hipporoute/{__version__}"
 
     def setup(self) -> None:
         self.request.settimeout(self.server.app.config.client_socket_timeout_seconds)
@@ -252,7 +252,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                 200,
                 {
                     "ok": True,
-                    "service": "codex-jev-router",
+                    "service": "hipporoute",
                     "version": __version__,
                     "jev_key": self.server.app.jev_key_loaded,
                 },
@@ -269,7 +269,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                             "object": "model",
                             "created": 1789747200,
                             "owned_by": "jev",
-                            "name": "Codex + Jev Router",
+                            "name": "HippoRoute (Jev)",
                         }
                     ],
                 },
@@ -299,7 +299,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
             try:
-                self._json(502, {"error": {"message": f"codex-jev-router: {type(exc).__name__}"}})
+                self._json(502, {"error": {"message": f"hipporoute: {type(exc).__name__}"}})
             except (BrokenPipeError, ConnectionResetError):
                 pass
         finally:
@@ -318,7 +318,7 @@ class RouterHandler(BaseHTTPRequestHandler):
             )
         except OSError as exc:
             print(
-                f"[codex-jev-router] rejection log failed: {type(exc).__name__}",
+                f"[hipporoute] rejection log failed: {type(exc).__name__}",
                 file=sys.stderr,
                 flush=True,
             )
@@ -331,7 +331,7 @@ class RouterHandler(BaseHTTPRequestHandler):
             capture.event(name, **fields)
         except OSError as exc:
             print(
-                f"[codex-jev-router] capture event failed: {type(exc).__name__}",
+                f"[hipporoute] capture event failed: {type(exc).__name__}",
                 file=sys.stderr,
                 flush=True,
             )
@@ -422,7 +422,7 @@ class RouterHandler(BaseHTTPRequestHandler):
             except OSError as exc:
                 self._capture_event("record_error", stage="state", error=type(exc).__name__)
                 print(
-                    f"[codex-jev-router] state record failed: {type(exc).__name__}",
+                    f"[hipporoute] state record failed: {type(exc).__name__}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -468,7 +468,7 @@ class RouterHandler(BaseHTTPRequestHandler):
             except OSError as exc:
                 self._capture_event("record_error", stage="decision_log", error=type(exc).__name__)
                 print(
-                    f"[codex-jev-router] decision log failed: {type(exc).__name__}",
+                    f"[hipporoute] decision log failed: {type(exc).__name__}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -558,7 +558,7 @@ class RouterHandler(BaseHTTPRequestHandler):
                 capture.close(response_completed=tracker.response_completed)
             except OSError as exc:
                 print(
-                    f"[codex-jev-router] stream capture close failed: {type(exc).__name__}",
+                    f"[hipporoute] stream capture close failed: {type(exc).__name__}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -572,7 +572,7 @@ def serve(config: RouterConfig) -> None:
     app = build_app(config)
     server = make_server((config.listen_host, config.listen_port), app)
     print(
-        f"[codex-jev-router] listening http://{config.listen_host}:{server.server_port} "
+        f"[hipporoute] listening http://{config.listen_host}:{server.server_port} "
         f"upstream={config.upstream_mode}",
         flush=True,
     )

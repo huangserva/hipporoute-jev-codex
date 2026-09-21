@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Idempotently publish the Codex + Jev model in Codex Router's user catalog."""
+"""Idempotently publish the HippoRoute (Jev) model in Codex Router's user catalog."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ MODEL = {
     "upstreamModel": "auto",
     "provider": "jev",
     "listed": True,
-    "displayName": "Codex + Jev Router",
+    "displayName": "HippoRoute (Jev)",
     "description": "Thread-pinned model and effort routing by Jev.",
     "priority": 95,
     "defaultEffort": "medium",

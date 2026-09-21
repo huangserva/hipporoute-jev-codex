@@ -353,7 +353,7 @@ def run_benchmark(args: argparse.Namespace) -> Path:
             f"http://127.0.0.1:{args.port}/v1",
         ):
             process = subprocess.Popen(
-                [sys.executable, "-u", "-m", "codex_jev_router", "--config", str(router_config)],
+                [sys.executable, "-u", "-m", "hipporoute", "--config", str(router_config)],
                 cwd=ROOT,
                 stdout=server_log,
                 stderr=subprocess.STDOUT,

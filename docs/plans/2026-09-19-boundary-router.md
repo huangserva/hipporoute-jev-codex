@@ -1,4 +1,4 @@
-# Codex + Jev Boundary Router Implementation Plan
+# HippoRoute-Jev-Codex Boundary Router Implementation Plan
 
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -14,8 +14,8 @@
 
 **Files:**
 - Create: `config.example.toml`
-- Create: `codex_jev_router/config.py`
-- Create: `codex_jev_router/policy.py`
+- Create: `hipporoute/config.py`
+- Create: `hipporoute/policy.py`
 - Create: `tests/test_policy.py`
 
 1. Write fixtures and failing tests for identifier precedence/conflict, step classification, first/new/tool/compaction/subagent events, confidence fallback, and switch-cost gates.
@@ -27,9 +27,9 @@
 ### Task 2: Jev client and fail-open engine
 
 **Files:**
-- Create: `codex_jev_router/jev.py`
-- Create: `codex_jev_router/state.py`
-- Create: `codex_jev_router/engine.py`
+- Create: `hipporoute/jev.py`
+- Create: `hipporoute/state.py`
+- Create: `hipporoute/engine.py`
 - Create: `tests/test_engine.py`
 
 1. Write failing tests for no-key fail-open, confidence below 0.5 to sol, three total attempts with exponential delays, state pinning, free reroute, shadow, kill switch, and atomic reload.
@@ -41,11 +41,11 @@
 ### Task 3: SSE, upstreams, and HTTP endpoints
 
 **Files:**
-- Create: `codex_jev_router/sse.py`
-- Create: `codex_jev_router/upstream.py`
-- Create: `codex_jev_router/server.py`
-- Create: `codex_jev_router/__init__.py`
-- Create: `codex_jev_router/__main__.py`
+- Create: `hipporoute/sse.py`
+- Create: `hipporoute/upstream.py`
+- Create: `hipporoute/server.py`
+- Create: `hipporoute/__init__.py`
+- Create: `hipporoute/__main__.py`
 - Create: `tests/test_server.py`
 
 1. Write failing tests for `assemble_sse`, usage extraction, streamed byte relay/chunking, non-stream assembly, forced upstream stream, health/models, and HTTPS proxy CONNECT construction.

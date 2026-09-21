@@ -8,7 +8,7 @@ from .server import serve
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Codex + Jev boundary router")
+    parser = argparse.ArgumentParser(description="HippoRoute-Jev-Codex boundary router")
     parser.add_argument(
         "--config",
         default=os.environ.get("CODEX_JEV_ROUTER_CONFIG"),

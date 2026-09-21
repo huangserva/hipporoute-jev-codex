@@ -15,16 +15,16 @@ caller_secret_path = "~/.codex/codex-router/caller-secret"
 timeout_seconds = 900
 
 [paths]
-state = "~/.codex/codex-jev-router/threads.json"
-decision_log = "~/.codex/codex-jev-router/decisions.jsonl"
-off = "~/.codex/codex-jev-router/router.off"
-shadow = "~/.codex/codex-jev-router/router.shadow"
-stream_debug = "~/.codex/codex-jev-router/stream.debug"
-raw_stream_dir = "~/.codex/codex-jev-router/raw-streams"
+state = "~/.codex/hipporoute/threads.json"
+decision_log = "~/.codex/hipporoute/decisions.jsonl"
+off = "~/.codex/hipporoute/router.off"
+shadow = "~/.codex/hipporoute/router.shadow"
+stream_debug = "~/.codex/hipporoute/stream.debug"
+raw_stream_dir = "~/.codex/hipporoute/raw-streams"
 
 [jev]
 # Optional third key source after TYPESAFE_API_KEY and before ~/.jev.env.
-# key_file = "~/.config/codex-jev-router/jev.env"
+# key_file = "~/.config/hipporoute/jev.env"
 url = "https://api.typesafe.ai/v1/systemone"
 model = "jev-latest"
 timeout_seconds = 4

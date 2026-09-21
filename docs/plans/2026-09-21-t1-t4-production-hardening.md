@@ -14,7 +14,7 @@
 
 **Files:**
 - Modify: `tests/test_config.py`, `tests/test_policy.py`, `tests/test_jev.py`, `tests/test_engine.py`
-- Modify: `codex_jev_router/config.py`, `codex_jev_router/policy.py`, `codex_jev_router/jev.py`, `codex_jev_router/engine.py`
+- Modify: `hipporoute/config.py`, `hipporoute/policy.py`, `hipporoute/jev.py`, `hipporoute/engine.py`
 - Modify: `config.example.toml`, `README.md`
 
 1. 先把默认 Luna 断言改为 `low`，新增 fan-out 协调任务识别和 Jev state/questions 断言。
@@ -26,7 +26,7 @@
 
 **Files:**
 - Modify: `tests/test_config.py`, `tests/test_server.py`
-- Modify: `codex_jev_router/config.py`, `codex_jev_router/server.py`
+- Modify: `hipporoute/config.py`, `hipporoute/server.py`
 - Modify: `config.example.toml`, `README.md`
 
 1. 新增失败测试：Content-Length 超限返回 413；chunked 累积超限返回 413；handler socket timeout 使用配置；并发槽耗尽返回 503 且决策日志记录 `server_busy`。
@@ -38,7 +38,7 @@
 
 **Files:**
 - Modify: `tests/test_server.py`
-- Modify: `codex_jev_router/server.py`
+- Modify: `hipporoute/server.py`
 
 1. 新增两个失败测试：200 无 Content-Type + JSON 对 stream 客户端返回 JSON；200 无 Content-Type + SSE 仍流式透传/非流式组装。
 2. 运行测试，确认 JSON 被旧 `status == 200` 错当 SSE。
@@ -49,7 +49,7 @@
 
 **Files:**
 - Modify: `tests/test_config.py`, `tests/test_engine.py`（或新建 `tests/test_state.py`）
-- Modify: `codex_jev_router/config.py`, `codex_jev_router/state.py`, `codex_jev_router/server.py`, `codex_jev_router/__main__.py`
+- Modify: `hipporoute/config.py`, `hipporoute/state.py`, `hipporoute/server.py`, `hipporoute/__main__.py`
 - Modify: `config.example.toml`, `README.md`
 
 1. 新增失败测试：put/update 不同步写；多个更新在一次 `flush()` 合并；后台间隔落盘；`close()` 强制刷新且幂等；server shutdown/close 触发 store close。

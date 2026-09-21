@@ -1,6 +1,10 @@
-# Codex + Jev Router
+# HippoRoute-Jev-Codex
 
-Codex + Jev Router is a local, standard-library-only Python service that chooses
+Boundary-only model routing for OpenAI Codex, driven by TypeSafe Jev.
+
+This project is not affiliated with OpenAI or TypeSafe.
+
+HippoRoute-Jev-Codex is a local, standard-library-only Python service that chooses
 an appropriate Codex model at **thread boundaries**, then pins that choice for
 the thread's lifetime. It asks TypeSafe Jev only for a new thread, a new user
 turn, a compaction checkpoint, or a sub-agent's first request. Tool continuations
@@ -11,6 +15,7 @@ The HTTP surface is OpenAI Responses-compatible: `GET /health`, `GET /v1/models`
 and `POST /v1/responses`. The server binds to loopback by default, streams SSE
 without buffering, supports non-stream callers, and can sit directly in front of
 ChatGPT Codex or behind [Codex Router](https://github.com/duolahypercho/codex-router).
+Repository: <https://github.com/huangserva/hipporoute-jev-codex>.
 
 ## Why boundary routing
 
@@ -70,7 +75,7 @@ Use exactly one of these mechanisms. A literal key in `config.toml` is rejected.
 
    ```toml
    [jev]
-   key_file = "~/.config/codex-jev-router/jev.env"
+   key_file = "~/.config/hipporoute/jev.env"
    ```
 
    The referenced file has the same single-line `TYPESAFE_API_KEY=...` format
@@ -85,10 +90,10 @@ This path uses Codex's existing ChatGPT subscription authorization. Back up the
 Codex config before changing it.
 
 ```bash
-git clone <repository-url> codex-jev-router
-cd codex-jev-router
+git clone https://github.com/huangserva/hipporoute-jev-codex.git
+cd hipporoute-jev-codex
 cp config.example.toml config.local.toml
-python3 -m codex_jev_router --config config.local.toml
+python3 -m hipporoute --config config.local.toml
 curl -fsS http://127.0.0.1:4319/health
 ```
 
@@ -103,10 +108,10 @@ direct_url = "https://chatgpt.com/backend-api/codex"
 Then back up and edit `~/.codex/config.toml`:
 
 ```toml
-model_provider = "codex-jev-router"
+model_provider = "hipporoute"
 
-[model_providers.codex-jev-router]
-name = "Codex + Jev Router"
+[model_providers.hipporoute]
+name = "HippoRoute (Jev)"
 base_url = "http://127.0.0.1:4319/v1"
 wire_api = "responses"
 requires_openai_auth = true
@@ -116,14 +121,14 @@ Verify with a new thread:
 
 ```bash
 codex exec 'Say OK'
-tail -n 1 ~/.codex/codex-jev-router/decisions.jsonl
+tail -n 1 ~/.codex/hipporoute/decisions.jsonl
 ```
 
 Restore your backed-up `~/.codex/config.toml` before stopping the service.
 
 ## B. Codex Router mode (model picker)
 
-This mode exposes **Codex + Jev Router** as `jev/auto` in compatible model
+This mode exposes **HippoRoute (Jev)** as `jev/auto` in compatible model
 pickers. Install Codex Router first and verify its health endpoint.
 
 ```bash
@@ -137,7 +142,7 @@ Prepare the local service config and start the service manually:
 
 ```bash
 cp config.service.example.toml config.service.toml
-python3 -m codex_jev_router --config config.service.toml
+python3 -m hipporoute --config config.service.toml
 curl -fsS http://127.0.0.1:4319/health
 ```
 
@@ -162,7 +167,7 @@ Equivalent provider commands are:
 
 ```bash
 "$CODEX_ROUTER_HOME/bin/codex-router" providers generic add jev \
-  --name "Codex + Jev Router" \
+  --name "HippoRoute (Jev)" \
   --base-url http://127.0.0.1:4319/v1 \
   --adapter openai-responses \
   --allow-private
@@ -172,7 +177,7 @@ python3 scripts/codex_router_catalog.py ~/.codex/codex-router/user-models.json
 ```
 
 Verify the CLI path with `codex exec -m jev/auto 'Say OK'`. For ChatGPT.app,
-quit it completely, reopen it, choose **Codex + Jev Router**, submit a new task,
+quit it completely, reopen it, choose **HippoRoute (Jev)**, submit a new task,
 and check that a new decision line appears.
 
 ## Operating modes
@@ -186,14 +191,14 @@ Sentinel paths are configurable under `[paths]`:
 | off | `router.off` exists | skip Jev, serve Astra fail-open |
 
 ```bash
-mkdir -p ~/.codex/codex-jev-router
-touch ~/.codex/codex-jev-router/router.shadow   # shadow
-rm -f ~/.codex/codex-jev-router/router.shadow  # live
-touch ~/.codex/codex-jev-router/router.off      # off
+mkdir -p ~/.codex/hipporoute
+touch ~/.codex/hipporoute/router.shadow   # shadow
+rm -f ~/.codex/hipporoute/router.shadow  # live
+touch ~/.codex/hipporoute/router.off      # off
 ```
 
 The JSONL decision log defaults to
-`~/.codex/codex-jev-router/decisions.jsonl`, is created with mode `0600`, and
+`~/.codex/hipporoute/decisions.jsonl`, is created with mode `0600`, and
 contains no authorization header or full prompt. Important fields include:
 
 | Field | Meaning |
@@ -209,7 +214,7 @@ contains no authorization header or full prompt. Important fields include:
 Summarize recent shadow traffic without editing the log:
 
 ```bash
-scripts/shadow-report.py --hours 3 ~/.codex/codex-jev-router/decisions.jsonl
+scripts/shadow-report.py --hours 3 ~/.codex/hipporoute/decisions.jsonl
 scripts/shadow-report.py --since 2026-09-21T09:00:00+08:00 /path/to/decisions.jsonl
 scripts/shadow-report.py --days 7 --json /path/to/log-directory
 ```
@@ -271,20 +276,61 @@ For Codex Router mode:
 ```bash
 CODEX_ROUTER_HOME=/path/to/codex-router scripts/disable.sh
 CODEX_ROUTER_HOME=/path/to/codex-router scripts/disable.sh --stop-service
-launchctl bootout "gui/$(id -u)/com.jev.codex-router-loopback-env" 2>/dev/null || true
-rm -f ~/Library/LaunchAgents/com.jev.codex-jev-router.plist
-rm -f ~/Library/LaunchAgents/com.jev.codex-router-loopback-env.plist
+launchctl bootout "gui/$(id -u)/com.hippo.codex-router-loopback-env" 2>/dev/null || true
+rm -f ~/Library/LaunchAgents/com.hippo.hipporoute.plist
+rm -f ~/Library/LaunchAgents/com.hippo.codex-router-loopback-env.plist
 ```
 
 Then use Codex Router's own uninstall/restore command if you no longer want it.
 For direct mode, restore the exact `~/.codex/config.toml` backup made before the
 provider edit, verify native `codex exec 'Say OK'`, then stop the router.
 
+## Migrating from `codex-jev-router`
+
+The project was renamed from `codex-jev-router` to **HippoRoute-Jev-Codex**. A
+running installation keeps working until you reinstall: the repository carries
+the new names, but nothing under `~/.codex` is touched by this repository. The
+Codex Router provider id stays `jev`, so no provider re-registration is needed.
+
+| Old | New |
+|---|---|
+| repository / directory `codex-jev-router` | `hipporoute-jev-codex` |
+| Python package `codex_jev_router` | `hipporoute` |
+| `python3 -m codex_jev_router` | `python3 -m hipporoute` |
+| state directory `~/.codex/codex-jev-router/` | `~/.codex/hipporoute/` |
+| launchd label `com.jev.codex-jev-router` | `com.hippo.hipporoute` |
+| proxy-env launchd label `com.jev.codex-router-loopback-env` | `com.hippo.codex-router-loopback-env` |
+| direct-mode provider id `codex-jev-router` | `hipporoute` |
+| model-picker entry `Codex + Jev Router` | `HippoRoute (Jev)` |
+| log `~/Library/Logs/codex-jev-router.*.log` | `~/Library/Logs/hipporoute.*.log` |
+
+To migrate an existing install:
+
+```bash
+# 1. unload the old launchd labels (the old files stay on disk until you remove them)
+launchctl bootout "gui/$(id -u)/com.jev.codex-jev-router" 2>/dev/null || true
+launchctl bootout "gui/$(id -u)/com.jev.codex-router-loopback-env" 2>/dev/null || true
+
+# 2. move the state directory, keeping the decisions log and thread state
+mv ~/.codex/codex-jev-router ~/.codex/hipporoute
+
+# 3. reinstall from the renamed checkout, then re-enter shadow mode if you want it
+touch ~/.codex/hipporoute/router.shadow
+scripts/install-service.sh
+```
+
+If your `config.service.toml` or `config.local.toml` sets `[paths]` explicitly,
+update those values (or regenerate the file from the example) so the service
+reads and writes the new directory. Direct-mode users must also rename the
+provider id in `~/.codex/config.toml`: run `scripts/configure_codex.py restore
+--state <path>` and then `enable` again, and delete a leftover
+`[model_providers.codex-jev-router]` table if an older run left one behind.
+
 ## Development
 
 ```bash
 python3 -m unittest -v
-python3 -m compileall -q codex_jev_router bench tests scripts
+python3 -m compileall -q hipporoute bench tests scripts
 ```
 
 Tests use fake Jev and upstream services and do not require network access. See
@@ -295,6 +341,10 @@ Tests use fake Jev and upstream services and do not require network access. See
 这是一个本机 Codex 边界路由器：只在线程首请求、新用户轮次、压缩点和
 子 agent 首请求问 Jev，工具续跑固定沿用已选模型；切换前再计算缓存重写
 成本，任何异常都 fail-open 到 Astra。第一次使用建议先开 shadow：创建
-`~/.codex/codex-jev-router/router.shadow`，观察决策日志，再决定是否进入 live。
+`~/.codex/hipporoute/router.shadow`，观察决策日志，再决定是否进入 live。
 密钥只能通过 `TYPESAFE_API_KEY`、权限 600 的 `~/.jev.env`，或 TOML 中的
 `jev.key_file` 提供，不能直接写进配置文件。
+项目原名 `codex-jev-router`，现已更名为 HippoRoute-Jev-Codex：Python 包名
+`hipporoute`，状态目录 `~/.codex/hipporoute/`，launchd 标识
+`com.hippo.hipporoute`，模型目录条目 `HippoRoute (Jev)`；Codex Router 的
+provider id 仍为 `jev`。老用户迁移步骤见上文 “Migrating from `codex-jev-router`”。

@@ -2,11 +2,11 @@
   {
     "id": "s1_parallel_docstrings",
     "expected_children": 3,
-    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个子 agent，task_name 分别为 docstring_policy、docstring_sse、docstring_upstream，分别只给 codex_jev_router/policy.py 的 inspect_request、codex_jev_router/sse.py 的 assemble_sse、codex_jev_router/upstream.py 的 UpstreamClient.open_response 补一条准确简短的 docstring；等待全部完成后运行相关单测，父线程不要亲自改代码。",
+    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个子 agent，task_name 分别为 docstring_policy、docstring_sse、docstring_upstream，分别只给 hipporoute/policy.py 的 inspect_request、hipporoute/sse.py 的 assemble_sse、hipporoute/upstream.py 的 UpstreamClient.open_response 补一条准确简短的 docstring；等待全部完成后运行相关单测，父线程不要亲自改代码。",
     "checks": [
-      {"type": "function_docstring", "path": "codex_jev_router/policy.py", "function": "inspect_request"},
-      {"type": "function_docstring", "path": "codex_jev_router/sse.py", "function": "assemble_sse"},
-      {"type": "function_docstring", "path": "codex_jev_router/upstream.py", "function": "open_response"},
+      {"type": "function_docstring", "path": "hipporoute/policy.py", "function": "inspect_request"},
+      {"type": "function_docstring", "path": "hipporoute/sse.py", "function": "assemble_sse"},
+      {"type": "function_docstring", "path": "hipporoute/upstream.py", "function": "open_response"},
       {"type": "command", "argv": ["python3", "-m", "unittest", "-q", "tests.test_policy", "tests.test_sse", "tests.test_upstream"]}
     ]
   },
@@ -36,9 +36,9 @@
   {
     "id": "s4_mixed_fanout",
     "expected_children": 3,
-    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个子 agent：task_name=config_docstring 的子 agent 只给 codex_jev_router/config.py 的 _section 补 docstring，task_name=run_jev_tests 的只读子 agent 运行 python3 -m unittest -q tests.test_jev 并把 PASS 或 FAIL 写入 jev-test-status.txt，task_name=audit_gc_edges 的子 agent 审计 ThreadStateStore.gc_expired 并把包含 TTL、strictly older、invalid timestamp 三个短语的边界结论写入 gc-analysis.md；等待全部完成并运行相关测试，父线程不要代做。",
+    "prompt": "使用原生 collaboration spawn_agent 并行启动恰好三个子 agent：task_name=config_docstring 的子 agent 只给 hipporoute/config.py 的 _section 补 docstring，task_name=run_jev_tests 的只读子 agent 运行 python3 -m unittest -q tests.test_jev 并把 PASS 或 FAIL 写入 jev-test-status.txt，task_name=audit_gc_edges 的子 agent 审计 ThreadStateStore.gc_expired 并把包含 TTL、strictly older、invalid timestamp 三个短语的边界结论写入 gc-analysis.md；等待全部完成并运行相关测试，父线程不要代做。",
     "checks": [
-      {"type": "function_docstring", "path": "codex_jev_router/config.py", "function": "_section"},
+      {"type": "function_docstring", "path": "hipporoute/config.py", "function": "_section"},
       {"type": "file_contains_all", "path": "jev-test-status.txt", "values": ["PASS"]},
       {"type": "file_regex_all", "path": "gc-analysis.md", "patterns": ["TTL", "strictly older", "invalid timestamp"]},
       {"type": "command", "argv": ["python3", "-m", "unittest", "-q", "tests.test_config", "tests.test_jev", "tests.test_engine"]}

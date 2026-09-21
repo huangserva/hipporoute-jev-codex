@@ -2,14 +2,14 @@ import unittest
 from unittest import mock
 from urllib.parse import urlsplit
 
-from codex_jev_router.upstream import UpstreamClient, make_connection
+from hipporoute.upstream import UpstreamClient, make_connection
 
 
 class UpstreamTests(unittest.TestCase):
     def test_https_direct_mode_honors_https_proxy_with_connect(self):
         upstream = urlsplit("https://chatgpt.com/backend-api/codex")
         with mock.patch.dict("os.environ", {"HTTPS_PROXY": "http://127.0.0.1:7897"}, clear=True):
-            with mock.patch("codex_jev_router.upstream.http.client.HTTPSConnection") as connection:
+            with mock.patch("hipporoute.upstream.http.client.HTTPSConnection") as connection:
                 result = make_connection(upstream, timeout=123)
         connection.assert_called_once_with("127.0.0.1", 7897, timeout=123, context=mock.ANY)
         result.set_tunnel.assert_called_once_with("chatgpt.com", 443)
@@ -48,7 +48,7 @@ class UpstreamTests(unittest.TestCase):
         connection = Connection()
         client = UpstreamClient.direct("https://chatgpt.com/backend-api/codex", timeout=10)
 
-        with mock.patch("codex_jev_router.upstream.make_connection", return_value=connection):
+        with mock.patch("hipporoute.upstream.make_connection", return_value=connection):
             with self.assertRaises(ConnectionError):
                 client.open_response({"stream": True}, [], "/v1/responses")
 

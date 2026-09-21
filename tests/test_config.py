@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from codex_jev_router.config import load_config
-from codex_jev_router.policy import ASTRA, LUNA, SOL
+from hipporoute.config import load_config
+from hipporoute.policy import ASTRA, LUNA, SOL
 
 
 class ConfigTests(unittest.TestCase):
@@ -24,8 +24,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.jev_circuit_open_seconds, 60.0)
         self.assertIsNone(config.jev_key_file)
         self.assertEqual(config.luna_effort, "low")
-        self.assertEqual(config.stream_debug_path, Path.home() / ".codex/codex-jev-router/stream.debug")
-        self.assertEqual(config.raw_stream_dir, Path.home() / ".codex/codex-jev-router/raw-streams")
+        self.assertEqual(config.stream_debug_path, Path.home() / ".codex/hipporoute/stream.debug")
+        self.assertEqual(config.raw_stream_dir, Path.home() / ".codex/hipporoute/raw-streams")
         self.assertEqual(config.prices[ASTRA].cache_write, 12.50)
         self.assertEqual(config.prices[SOL].cache_read, 0.40)
         self.assertEqual(config.prices[LUNA].cache_write, 0.25)

@@ -39,12 +39,12 @@ class ConfigureCodexTests(unittest.TestCase):
             )
 
             enabled = config.read_text(encoding="utf-8")
-            self.assertEqual(enabled.count('model_provider = "codex-jev-router"'), 1)
-            self.assertEqual(enabled.count("[model_providers.codex-jev-router]"), 1)
+            self.assertEqual(enabled.count('model_provider = "hipporoute"'), 1)
+            self.assertEqual(enabled.count("[model_providers.hipporoute]"), 1)
             self.assertIn('base_url = "http://127.0.0.1:4319/v1"', enabled)
             self.assertIn('requires_openai_auth = true', enabled)
             self.assertEqual(first["backup_path"], second["backup_path"])
-            self.assertEqual(len(list(root.glob("config.toml.backup-codex-jev-router-*"))), 1)
+            self.assertEqual(len(list(root.glob("config.toml.backup-hipporoute-*"))), 1)
             self.assertEqual(Path(first["backup_path"]).read_text(encoding="utf-8"), original)
 
     def test_restore_is_exact_and_idempotent(self):
@@ -88,11 +88,11 @@ class ServiceScriptTests(unittest.TestCase):
     def test_install_service_contains_required_launchd_contract(self):
         script = self._script("install-service.sh")
         for required in (
-            "com.jev.codex-jev-router",
+            "com.hippo.hipporoute",
             "<key>RunAtLoad</key><true/>",
             "<key>KeepAlive</key><true/>",
-            "codex-jev-router.out.log",
-            "codex-jev-router.err.log",
+            "hipporoute.out.log",
+            "hipporoute.err.log",
             "HTTPS_PROXY",
             "JEV_ROUTER_HTTPS_PROXY",
             "NO_PROXY",
@@ -114,7 +114,7 @@ class ServiceScriptTests(unittest.TestCase):
 
     def test_install_service_persists_gui_loopback_proxy_bypass(self):
         script = self._script("install-service.sh")
-        self.assertIn("com.jev.codex-router-loopback-env", script)
+        self.assertIn("com.hippo.codex-router-loopback-env", script)
         self.assertIn("launchctl", script)
         self.assertIn("setenv", script)
         self.assertIn("localhost,127.0.0.1,::1", script)
@@ -184,7 +184,7 @@ class CodexRouterCatalogTests(unittest.TestCase):
             self.assertEqual(route["gatewayModel"], "jev-auto")
             self.assertEqual(route["upstreamModel"], "auto")
             self.assertEqual(route["provider"], "jev")
-            self.assertEqual(route["displayName"], "Codex + Jev Router")
+            self.assertEqual(route["displayName"], "HippoRoute (Jev)")
             self.assertEqual(
                 [item["effort"] for item in route["reasoningLevels"]],
                 ["low", "medium", "high", "xhigh", "max"],

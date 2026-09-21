@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from codex_jev_router.sse import SSEUsageTracker, assemble_sse
+from hipporoute.sse import SSEUsageTracker, assemble_sse
 
 
 def event(name, payload):

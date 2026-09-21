@@ -3,11 +3,11 @@
     "id": "m1_rename_local",
     "category": "mechanical",
     "expected_model": "gpt-5.6-luna",
-    "prompt": "把 codex_jev_router/policy.py 的局部变量 token_factor 重命名为 million_token_factor，并更新该函数内所有引用，其他行为不变。",
+    "prompt": "把 hipporoute/policy.py 的局部变量 token_factor 重命名为 million_token_factor，并更新该函数内所有引用，其他行为不变。",
     "checks": [
       {
         "type": "file_contains_all",
-        "path": "codex_jev_router/policy.py",
+        "path": "hipporoute/policy.py",
         "values": [
           "million_token_factor = Decimal(context_tokens)",
           "stay_decimal = million_token_factor",
@@ -16,7 +16,7 @@
       },
       {
         "type": "file_not_contains_all",
-        "path": "codex_jev_router/policy.py",
+        "path": "hipporoute/policy.py",
         "values": ["    token_factor = ", "stay_decimal = token_factor", "switch_decimal = token_factor"]
       },
       {"type": "command", "argv": ["python3", "-m", "unittest", "-q", "tests.test_policy"]}
@@ -26,9 +26,9 @@
     "id": "m2_add_docstring",
     "category": "mechanical",
     "expected_model": "gpt-5.6-luna",
-    "prompt": "给 codex_jev_router/server.py 里的 task_preview 函数补一条准确简短的 docstring，不改任何行为。",
+    "prompt": "给 hipporoute/server.py 里的 task_preview 函数补一条准确简短的 docstring，不改任何行为。",
     "checks": [
-      {"type": "function_docstring", "path": "codex_jev_router/server.py", "function": "task_preview"},
+      {"type": "function_docstring", "path": "hipporoute/server.py", "function": "task_preview"},
       {"type": "command", "argv": ["python3", "-m", "unittest", "-q", "tests.test_server"]}
     ]
   },
@@ -36,13 +36,13 @@
     "id": "m3_fix_typo",
     "category": "mechanical",
     "expected_model": "gpt-5.6-luna",
-    "prompt": "修正 README.md 第一行标题里明显的“Routre”拼写错误，只改这一处。",
+    "prompt": "修正 README.md 第一行标题里明显的拼写错误（Codxe），只改这一处。",
     "prepare": [
       {
         "type": "replace",
         "path": "README.md",
-        "find": "# Codex + Jev Router",
-        "replace": "# Codex + Jev Routre",
+        "find": "# HippoRoute-Jev-Codex",
+        "replace": "# HippoRoute-Jev-Codxe",
         "count": 1
       }
     ],
@@ -50,25 +50,25 @@
       {
         "type": "file_contains_all",
         "path": "README.md",
-        "values": ["# Codex + Jev Router"]
+        "values": ["# HippoRoute-Jev-Codex"]
       },
-      {"type": "file_not_contains_all", "path": "README.md", "values": ["Routre"]}
+      {"type": "file_not_contains_all", "path": "README.md", "values": ["Codxe"]}
     ]
   },
   {
     "id": "m4_extract_constant",
     "category": "mechanical",
     "expected_model": "gpt-5.6-luna",
-    "prompt": "把 codex_jev_router/server.py 的 SSE 读取块大小 65536 提取成模块级常量 SSE_READ_SIZE，并更新两个读取调用点，行为保持不变。",
+    "prompt": "把 hipporoute/server.py 的 SSE 读取块大小 65536 提取成模块级常量 SSE_READ_SIZE，并更新两个读取调用点，行为保持不变。",
     "checks": [
       {
         "type": "file_contains_all",
-        "path": "codex_jev_router/server.py",
+        "path": "hipporoute/server.py",
         "values": ["SSE_READ_SIZE = 65536", "response.read1(SSE_READ_SIZE)", "response.read(SSE_READ_SIZE)"]
       },
       {
         "type": "file_not_contains_all",
-        "path": "codex_jev_router/server.py",
+        "path": "hipporoute/server.py",
         "values": ["response.read1(65536)", "response.read(65536)"]
       },
       {"type": "command", "argv": ["python3", "-m", "unittest", "-q", "tests.test_server"]}
@@ -88,16 +88,16 @@
     "id": "m6_python_line_manifest",
     "category": "mechanical",
     "expected_model": "gpt-5.6-luna",
-    "prompt": "统计 codex_jev_router 和 tests 目录下每个 .py 文件的行数，按路径排序，以“行数 空格 相对路径”写入 python-lines.txt。",
+    "prompt": "统计 hipporoute 和 tests 目录下每个 .py 文件的行数，按路径排序，以“行数 空格 相对路径”写入 python-lines.txt。",
     "checks": [
-      {"type": "python_line_manifest", "path": "python-lines.txt", "paths": ["codex_jev_router", "tests"]}
+      {"type": "python_line_manifest", "path": "python-lines.txt", "paths": ["hipporoute", "tests"]}
     ]
   },
   {
     "id": "r1_policy_boundaries",
     "category": "reasoning",
     "expected_model": "gpt-6-astra",
-    "prompt": "分析 codex_jev_router/policy.py 中 switch_gate 对预算等号、20000 token 阈值、同模型 effort 变化、未知模型和缺失价格的边界行为与风险，把具体改进建议写入 bench-policy-analysis.md，不修改代码。",
+    "prompt": "分析 hipporoute/policy.py 中 switch_gate 对预算等号、20000 token 阈值、同模型 effort 变化、未知模型和缺失价格的边界行为与风险，把具体改进建议写入 bench-policy-analysis.md，不修改代码。",
     "checks": [
       {
         "type": "file_regex_all",
@@ -110,7 +110,7 @@
     "id": "r2_sse_completion_paths",
     "category": "reasoning",
     "expected_model": "gpt-6-astra",
-    "prompt": "审计 codex_jev_router/sse.py 和 server.py，找出哪些路径会让日志观察不到 response.completed，并把根因分类、现有影响和改进建议写入 bench-sse-analysis.md，不修改代码。",
+    "prompt": "审计 hipporoute/sse.py 和 server.py，找出哪些路径会让日志观察不到 response.completed，并把根因分类、现有影响和改进建议写入 bench-sse-analysis.md，不修改代码。",
     "checks": [
       {
         "type": "file_contains_all",

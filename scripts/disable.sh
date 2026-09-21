@@ -12,7 +12,7 @@ elif command -v codex-router >/dev/null 2>&1; then
 else
   CR_BIN=""
 fi
-LABEL="com.jev.codex-jev-router"
+LABEL="com.hippo.hipporoute"
 STOP_SERVICE=0
 
 for argument in "$@"; do
@@ -31,5 +31,5 @@ if (( STOP_SERVICE )); then
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 fi
 
-print "Codex + Jev Router is hidden and provider jev is disabled"
+print "HippoRoute (Jev) is hidden and provider jev is disabled"
 print "shadow sentinel was preserved"

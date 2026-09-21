@@ -11,7 +11,7 @@ from typing import Any
 from .policy import ASTRA, EFFORTS, LUNA, SOL, Price
 
 
-DEFAULT_STATE_DIR = Path("~/.codex/codex-jev-router").expanduser()
+DEFAULT_STATE_DIR = Path("~/.codex/hipporoute").expanduser()
 
 
 @dataclass(frozen=True)

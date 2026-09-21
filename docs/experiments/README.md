@@ -1,5 +1,11 @@
 # Experiment archive
 
+> These reports were written before the project was renamed. Wherever they say
+> `codex-jev-router` or `codex_jev_router`, they mean what is now
+> **HippoRoute-Jev-Codex** (`hipporoute-jev-codex`, Python package `hipporoute`).
+> The bodies are intentionally left as written, so the reports keep matching the
+> data, paths, and service names observed at the time.
+
 These reports preserve the author's single-machine, single-user experiments.
 They document protocol observations, benchmark methodology, raw aggregate
 numbers, and decisions that shaped version 0.1.0. They are evidence, not a

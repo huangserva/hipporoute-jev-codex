@@ -4,9 +4,9 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python3)}"
-LABEL="com.jev.codex-jev-router"
+LABEL="com.hippo.hipporoute"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-ENV_LABEL="com.jev.codex-router-loopback-env"
+ENV_LABEL="com.hippo.codex-router-loopback-env"
 ENV_PLIST="$HOME/Library/LaunchAgents/$ENV_LABEL.plist"
 LOG_DIR="$HOME/Library/Logs"
 DOMAIN="gui/$(id -u)"
@@ -73,7 +73,7 @@ cat > "$PLIST" <<EOF
   <array>
     <string>$PYTHON_BIN</string>
     <string>-m</string>
-    <string>codex_jev_router</string>
+    <string>hipporoute</string>
     <string>--config</string>
     <string>$SERVICE_CONFIG</string>
   </array>
@@ -89,8 +89,8 @@ cat > "$PLIST" <<EOF
     $PROXY_XML
     <key>NO_PROXY</key><string>127.0.0.1,localhost</string>
   </dict>
-  <key>StandardOutPath</key><string>$LOG_DIR/codex-jev-router.out.log</string>
-  <key>StandardErrorPath</key><string>$LOG_DIR/codex-jev-router.err.log</string>
+  <key>StandardOutPath</key><string>$LOG_DIR/hipporoute.out.log</string>
+  <key>StandardErrorPath</key><string>$LOG_DIR/hipporoute.err.log</string>
 </dict>
 </plist>
 EOF
@@ -103,12 +103,12 @@ launchctl kickstart -k "$DOMAIN/$LABEL"
 for _ in {1..40}; do
   if curl --noproxy 127.0.0.1 -fsS --max-time 2 "$HEALTH_URL" 2>/dev/null \
       | grep -q '"jev_key":true'; then
-    print "codex-jev-router service healthy; jev_key=true"
+    print "hipporoute service healthy; jev_key=true"
     exit 0
   fi
   sleep 0.5
 done
 
 print -u2 "service did not become healthy with jev_key=true"
-print -u2 "inspect: $LOG_DIR/codex-jev-router.err.log"
+print -u2 "inspect: $LOG_DIR/hipporoute.err.log"
 exit 1

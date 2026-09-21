@@ -177,7 +177,7 @@ class ThreadStateStore:
                 self.flush()
             except OSError as exc:
                 print(
-                    f"[codex-jev-router] state background flush failed: {type(exc).__name__}",
+                    f"[hipporoute] state background flush failed: {type(exc).__name__}",
                     file=sys.stderr,
                     flush=True,
                 )

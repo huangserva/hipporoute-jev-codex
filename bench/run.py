@@ -24,7 +24,7 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[1]
 TASKS_PATH = ROOT / "bench" / "tasks.json"
 DEFAULT_CODEX_CONFIG = Path("~/.codex/config.toml").expanduser()
-PROVIDER_NAME = "codex-jev-router-bench"
+PROVIDER_NAME = "hipporoute-bench"
 BACKTEST_PRICES = {
     "gpt-6-astra": {"input": 10.0, "cached_input": 1.0, "output": 50.0},
     "gpt-5.6-sol": {"input": 4.0, "cached_input": 0.4, "output": 20.0},
@@ -196,7 +196,7 @@ def _bench_config_text(original: str, base_url: str) -> str:
     changed = "".join(prefix + lines[table_at:]).rstrip() + "\n\n"
     changed += (
         f"[model_providers.{PROVIDER_NAME}]\n"
-        'name = "Codex + Jev Benchmark"\n'
+        'name = "HippoRoute (Jev) Benchmark"\n'
         f'base_url = "{base_url}"\n'
         'wire_api = "responses"\n'
         "requires_openai_auth = true\n"
@@ -578,7 +578,7 @@ def run_benchmark(args: argparse.Namespace) -> Path:
             f"http://127.0.0.1:{args.port}/v1",
         ):
             process = subprocess.Popen(
-                [sys.executable, "-u", "-m", "codex_jev_router", "--config", str(router_config)],
+                [sys.executable, "-u", "-m", "hipporoute", "--config", str(router_config)],
                 cwd=ROOT,
                 stdout=server_log,
                 stderr=subprocess.STDOUT,

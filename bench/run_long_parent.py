@@ -225,13 +225,13 @@ def _prompt(level: dict[str, Any], fixture_paths: list[Path]) -> str:
 
 {numbered}
 
-全部读完后，使用原生 collaboration spawn_agent 在同一轮并行启动恰好三个子 agent，调用时显式写 `fork_turns=all`，task_name 分别为 docstring_policy、docstring_sse、docstring_upstream。分别只让它们给 codex_jev_router/policy.py 的 inspect_request、codex_jev_router/sse.py 的 assemble_sse、codex_jev_router/upstream.py 的 UpstreamClient.open_response 补一条准确简短的 docstring。等待全部完成后运行 `python3 -m unittest -q tests.test_policy tests.test_sse tests.test_upstream`。父线程不要亲自修改这三个文件。"""
+全部读完后，使用原生 collaboration spawn_agent 在同一轮并行启动恰好三个子 agent，调用时显式写 `fork_turns=all`，task_name 分别为 docstring_policy、docstring_sse、docstring_upstream。分别只让它们给 hipporoute/policy.py 的 inspect_request、hipporoute/sse.py 的 assemble_sse、hipporoute/upstream.py 的 UpstreamClient.open_response 补一条准确简短的 docstring。等待全部完成后运行 `python3 -m unittest -q tests.test_policy tests.test_sse tests.test_upstream`。父线程不要亲自修改这三个文件。"""
 
 
 CHECKS = [
-    {"type": "function_docstring", "path": "codex_jev_router/policy.py", "function": "inspect_request"},
-    {"type": "function_docstring", "path": "codex_jev_router/sse.py", "function": "assemble_sse"},
-    {"type": "function_docstring", "path": "codex_jev_router/upstream.py", "function": "open_response"},
+    {"type": "function_docstring", "path": "hipporoute/policy.py", "function": "inspect_request"},
+    {"type": "function_docstring", "path": "hipporoute/sse.py", "function": "assemble_sse"},
+    {"type": "function_docstring", "path": "hipporoute/upstream.py", "function": "open_response"},
     {
         "type": "command",
         "argv": [
@@ -375,7 +375,7 @@ def run_benchmark(args: argparse.Namespace) -> Path:
             Path(args.codex_config).expanduser(), backup_path, f"http://127.0.0.1:{args.port}/v1"
         ):
             process = subprocess.Popen(
-                [sys.executable, "-u", "-m", "codex_jev_router", "--config", str(router_config)],
+                [sys.executable, "-u", "-m", "hipporoute", "--config", str(router_config)],
                 cwd=ROOT,
                 stdout=server_log,
                 stderr=subprocess.STDOUT,

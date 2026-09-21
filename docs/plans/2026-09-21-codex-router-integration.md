@@ -2,9 +2,9 @@
 
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Install Codex Router, publish `jev/auto`, switch codex-jev-router to caller edge, and preserve shadow mode with reversible operations.
+**Goal:** Install Codex Router, publish `jev/auto`, switch HippoRoute-Jev-Codex to caller edge, and preserve shadow mode with reversible operations.
 
-**Architecture:** Codex Router owns user Codex managed blocks, the caller capability, provider registry and merged catalog. codex-jev-router reads a secret path at runtime and is managed by its existing LaunchAgent. Repository scripts orchestrate public CLI commands rather than editing router-owned state.
+**Architecture:** Codex Router owns user Codex managed blocks, the caller capability, provider registry and merged catalog. HippoRoute-Jev-Codex reads a secret path at runtime and is managed by its existing LaunchAgent. Repository scripts orchestrate public CLI commands rather than editing router-owned state.
 
 **Tech Stack:** Codex Router Node/Python service, launchd, Python 3.11+ standard library, zsh, unittest, JSON/TOML.
 

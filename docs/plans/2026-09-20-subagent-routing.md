@@ -13,7 +13,7 @@
 ### Task 1: Freeze capture evidence and delegation extraction contract
 
 **Files:**
-- Modify: `codex_jev_router/policy.py`
+- Modify: `hipporoute/policy.py`
 - Modify: `tests/test_policy.py`
 
 **Steps:**
@@ -25,10 +25,10 @@
 ### Task 2: Add subagent identity/state and dedicated Jev context
 
 **Files:**
-- Modify: `codex_jev_router/policy.py`
-- Modify: `codex_jev_router/state.py`
-- Modify: `codex_jev_router/engine.py`
-- Modify: `codex_jev_router/jev.py`
+- Modify: `hipporoute/policy.py`
+- Modify: `hipporoute/state.py`
+- Modify: `hipporoute/engine.py`
+- Modify: `hipporoute/jev.py`
 - Modify: `tests/test_engine.py`
 - Modify: `tests/test_jev.py`
 
@@ -41,10 +41,10 @@
 ### Task 3: Serialize per-thread decisions and add TTL/GC
 
 **Files:**
-- Modify: `codex_jev_router/config.py`
+- Modify: `hipporoute/config.py`
 - Modify: `config.example.toml`
-- Modify: `codex_jev_router/state.py`
-- Modify: `codex_jev_router/engine.py`
+- Modify: `hipporoute/state.py`
+- Modify: `hipporoute/engine.py`
 - Modify: `tests/test_config.py`
 - Modify: `tests/test_engine.py`
 
@@ -58,8 +58,8 @@
 ### Task 4: Observe spawn calls and enrich decision logs
 
 **Files:**
-- Modify: `codex_jev_router/sse.py`
-- Modify: `codex_jev_router/server.py`
+- Modify: `hipporoute/sse.py`
+- Modify: `hipporoute/server.py`
 - Modify: `tests/test_sse.py`
 - Modify: `tests/test_server.py`
 

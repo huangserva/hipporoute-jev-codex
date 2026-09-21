@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from codex_jev_router.policy import (
+from hipporoute.policy import (
     ASTRA,
     LUNA,
     SOL,

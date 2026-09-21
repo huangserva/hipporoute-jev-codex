@@ -21,7 +21,7 @@
 
 ### Task 2: Key-file configuration
 
-**Files:** Modify `codex_jev_router/config.py`, `codex_jev_router/jev.py`, `codex_jev_router/server.py`, `tests/test_config.py`, `tests/test_jev.py`, `config.example.toml`; create `.env.example`.
+**Files:** Modify `hipporoute/config.py`, `hipporoute/jev.py`, `hipporoute/server.py`, `tests/test_config.py`, `tests/test_jev.py`, `config.example.toml`; create `.env.example`.
 
 1. Write failing tests for environment → configured key file → default `~/.jev.env` precedence and rejection of literal `[jev].key`.
 2. Run focused tests and confirm the expected failures.
@@ -47,7 +47,7 @@
 
 ### Task 5: Final verification
 
-1. Run `python3 -m unittest` and `python3 -m compileall -q codex_jev_router scripts tests`.
+1. Run `python3 -m unittest` and `python3 -m compileall -q hipporoute scripts tests`.
 2. Run `git diff --check`, fixture validation, ignore checks, current-tree secret scans, exact-secret comparisons, and full-history scans.
 3. Confirm no process, service, or file under `~/.codex` was changed.
 4. Commit in Chinese and print `开源整理完成`.

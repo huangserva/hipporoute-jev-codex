@@ -1,2 +1,2 @@
-"""Benchmark support for codex-jev-router."""
+"""Benchmark support for HippoRoute-Jev-Codex."""
 

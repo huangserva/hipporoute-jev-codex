@@ -1,4 +1,4 @@
-# Project status
+# HippoRoute-Jev-Codex status
 
 Version target: **0.1.0 public preview**. The router, benchmarks, launchd helpers,
 and offline test suite are implemented. The author is running a shadow soak;
@@ -66,7 +66,7 @@ All values are configurable in [config.example.toml](config.example.toml).
 
 ```bash
 python3 -m unittest -v
-python3 -m compileall -q codex_jev_router bench tests scripts
+python3 -m compileall -q hipporoute bench tests scripts
 ```
 
 The exact passing test count is recorded in the latest release/audit report,

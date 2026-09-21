@@ -5,7 +5,7 @@ import urllib.error
 from email.message import Message
 from pathlib import Path
 
-from codex_jev_router.jev import JevClient, load_key, questions_for
+from hipporoute.jev import JevClient, load_key, questions_for
 
 
 class FakeResponse:

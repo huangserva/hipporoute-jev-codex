@@ -15,7 +15,7 @@ else
 fi
 CODEX_ROUTER_HEALTH="http://127.0.0.1:4202/health"
 JEV_ROUTER_HEALTH="http://127.0.0.1:4319/health"
-SHADOW_PATH="$HOME/.codex/codex-jev-router/router.shadow"
+SHADOW_PATH="$HOME/.codex/hipporoute/router.shadow"
 USER_MODELS="$HOME/.codex/codex-router/user-models.json"
 
 check_codex_router_health() {
@@ -44,7 +44,7 @@ if ! check_jev_router_health; then
   "$REPO/scripts/install-service.sh"
 fi
 if ! check_jev_router_health; then
-  print -u2 "codex-jev-router health/key check failed; provider was not published"
+  print -u2 "hipporoute health/key check failed; provider was not published"
   exit 1
 fi
 
@@ -54,13 +54,13 @@ touch "$SHADOW_PATH"
 "$CR_BIN" chatgpt-session enable
 if "$CR_BIN" providers generic list --json | grep -q '"id": "jev"'; then
   "$CR_BIN" providers generic edit jev \
-    --name "Codex + Jev Router" \
+    --name "HippoRoute (Jev)" \
     --base-url http://127.0.0.1:4319/v1 \
     --adapter openai-responses \
     --allow-private
 else
   "$CR_BIN" providers generic add jev \
-    --name "Codex + Jev Router" \
+    --name "HippoRoute (Jev)" \
     --base-url http://127.0.0.1:4319/v1 \
     --adapter openai-responses \
     --allow-private
@@ -70,6 +70,6 @@ python3 "$REPO/scripts/codex_router_catalog.py" "$USER_MODELS"
 "$CR_BIN" refresh-catalog
 "$CR_BIN" control picker set jev/auto show
 
-print "Codex + Jev Router published in shadow mode"
-print "Fully quit and reopen ChatGPT.app, then select: Codex + Jev Router"
+print "HippoRoute (Jev) published in shadow mode"
+print "Fully quit and reopen ChatGPT.app, then select: HippoRoute (Jev)"
 print "disable: $REPO/scripts/disable.sh"
