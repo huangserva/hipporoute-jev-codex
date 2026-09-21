@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -111,6 +112,72 @@ def _json_object(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _caller_edge_identity(payload: Mapping[str, Any]) -> dict[str, str | bool | None]:
+    """Recover the identity fields Codex Router strips on generic routes.
+
+    ``prompt_cache_key`` is a root-session key, not a child-thread key.  A
+    child therefore adds the stable NEW_TASK message id that Codex keeps in
+    every replay of that child.  The latest user message id supplies the turn
+    boundary for root threads.  This fallback is used only when all canonical
+    identity transports are absent.
+    """
+
+    root = payload.get("prompt_cache_key")
+    if not isinstance(root, str) or not root:
+        return {}
+    raw_input = payload.get("input")
+    items = raw_input if isinstance(raw_input, list) else []
+    latest_user_id = None
+    latest_user_text = ""
+    child_item_id = None
+    agent_name = None
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        pieces = []
+        if isinstance(content, str):
+            pieces.append(content)
+        elif isinstance(content, list):
+            pieces.extend(
+                part.get("text", "")
+                for part in content
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            )
+        text = "".join(pieces)
+        if item.get("role") == "user":
+            item_id = item.get("id")
+            latest_user_id = item_id if isinstance(item_id, str) and item_id else None
+            latest_user_text = text
+        if item.get("type") == "agent_message" and text.lstrip().startswith("Message Type: NEW_TASK"):
+            item_id = item.get("id")
+            if isinstance(item_id, str) and item_id:
+                child_item_id = item_id
+            match = re.search(r"(?m)^Task name:\s*(\S.*?)\s*$", text)
+            if match:
+                agent_name = match.group(1).strip()
+
+    if latest_user_id is None and latest_user_text:
+        latest_user_id = "user-sha256:" + hashlib.sha256(latest_user_text.encode("utf-8")).hexdigest()
+    if child_item_id:
+        return {
+            "thread_id": f"{root}:subagent:{child_item_id}",
+            "turn_id": latest_user_id,
+            "parent_thread_id": root,
+            "is_subagent": True,
+            "agent_name": agent_name,
+            "subagent_kind": "thread_spawn",
+        }
+    return {
+        "thread_id": root,
+        "turn_id": latest_user_id,
+        "parent_thread_id": None,
+        "is_subagent": False,
+        "agent_name": None,
+        "subagent_kind": None,
+    }
+
+
 def resolve_identity(headers: Mapping[str, str], payload: Mapping[str, Any]) -> ThreadIdentity:
     lowered = {str(key).lower(): value for key, value in headers.items()}
     client = payload.get("client_metadata")
@@ -130,18 +197,28 @@ def resolve_identity(headers: Mapping[str, str], payload: Mapping[str, Any]) -> 
     thread_id = sources.get("header") or sources.get("client_metadata") or sources.get("turn_metadata")
     conflict = len(set(sources.values())) > 1
 
+    caller_edge = {}
+    if not thread_id:
+        caller_edge = _caller_edge_identity(payload)
+        fallback_thread_id = caller_edge.get("thread_id")
+        if isinstance(fallback_thread_id, str):
+            thread_id = fallback_thread_id
+            sources["prompt_cache_key"] = str(payload["prompt_cache_key"])
+
     parent_thread_id = (
         lowered.get("x-codex-parent-thread-id")
         or client.get("x-codex-parent-thread-id")
         or metadata.get("parent_thread_id")
+        or caller_edge.get("parent_thread_id")
     )
-    turn_id = metadata.get("turn_id") or client.get("turn_id")
+    turn_id = metadata.get("turn_id") or client.get("turn_id") or caller_edge.get("turn_id")
     parent_turn_id = metadata.get("parent_turn_id") or client.get("parent_turn_id")
     is_subagent = bool(
         lowered.get("x-openai-subagent") == "collab_spawn"
         or parent_thread_id
         or metadata.get("thread_source") == "subagent"
         or metadata.get("subagent_kind") == "thread_spawn"
+        or caller_edge.get("is_subagent") is True
     )
     return ThreadIdentity(
         thread_id=thread_id,
@@ -152,9 +229,17 @@ def resolve_identity(headers: Mapping[str, str], payload: Mapping[str, Any]) -> 
         conflict=conflict,
         sources=sources,
         metadata=metadata,
-        agent_name=metadata.get("agent_name") if isinstance(metadata.get("agent_name"), str) else None,
+        agent_name=(
+            metadata.get("agent_name")
+            if isinstance(metadata.get("agent_name"), str)
+            else caller_edge.get("agent_name") if isinstance(caller_edge.get("agent_name"), str) else None
+        ),
         subagent_kind=(
-            metadata.get("subagent_kind") if isinstance(metadata.get("subagent_kind"), str) else None
+            metadata.get("subagent_kind")
+            if isinstance(metadata.get("subagent_kind"), str)
+            else caller_edge.get("subagent_kind")
+            if isinstance(caller_edge.get("subagent_kind"), str)
+            else None
         ),
     )
 

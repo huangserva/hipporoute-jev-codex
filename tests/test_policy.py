@@ -100,6 +100,61 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(identity.subagent_kind, "thread_spawn")
         self.assertFalse(identity.conflict)
 
+    def test_caller_edge_falls_back_to_prompt_cache_and_latest_user_message_id(self):
+        routed = {
+            "prompt_cache_key": ROOT,
+            "input": [
+                {
+                    "id": "msg-user-turn-1",
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Do work"}],
+                }
+            ],
+        }
+
+        identity = resolve_identity({}, routed)
+
+        self.assertEqual(identity.thread_id, ROOT)
+        self.assertEqual(identity.turn_id, "msg-user-turn-1")
+        self.assertEqual(identity.sources, {"prompt_cache_key": ROOT})
+        self.assertFalse(identity.is_subagent)
+
+    def test_caller_edge_gives_new_task_a_child_identity_under_prompt_cache_root(self):
+        routed = {
+            "prompt_cache_key": ROOT,
+            "input": [
+                {
+                    "id": "msg-user-turn-1",
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Coordinate work"}],
+                },
+                {
+                    "id": "msg-child-new-task",
+                    "type": "agent_message",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Message Type: NEW_TASK\n"
+                                "Task name: /root/docstring_policy\n"
+                                "Sender: /root\nPayload:\nAdd a docstring."
+                            ),
+                        }
+                    ],
+                },
+            ],
+        }
+
+        identity = resolve_identity({}, routed)
+
+        self.assertEqual(identity.thread_id, f"{ROOT}:subagent:msg-child-new-task")
+        self.assertEqual(identity.parent_thread_id, ROOT)
+        self.assertEqual(identity.agent_name, "/root/docstring_policy")
+        self.assertEqual(identity.subagent_kind, "thread_spawn")
+        self.assertTrue(identity.is_subagent)
+
 
 class RequestClassificationTests(unittest.TestCase):
     def test_explicit_parallel_subagent_task_is_coordination_only(self):
