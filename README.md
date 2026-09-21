@@ -157,6 +157,15 @@ scripts/install-service.sh
 The installer embeds only the proxy URL, never the Jev key. It reads
 `config.service.toml`, creating it from the ignored example if absent.
 
+It also picks the interpreter that goes into the plist instead of trusting
+`command -v python3` (which may resolve to some other project's activated
+virtualenv): it probes `/opt/homebrew/bin/python3`, then
+`/usr/local/bin/python3`, then `/usr/bin/python3`, and only then falls back to
+`command -v python3`, requiring Python >= 3.11 and skipping any candidate that
+fails that check. Set `HIPPOROUTE_PYTHON=/path/to/python3` to override, and check
+the `using python interpreter: ...` line it prints (repeated in the health line
+as `python=...`).
+
 Register and show the provider (the script is idempotent):
 
 ```bash
@@ -304,20 +313,35 @@ Codex Router provider id stays `jev`, so no provider re-registration is needed.
 | model-picker entry `Codex + Jev Router` | `HippoRoute (Jev)` |
 | log `~/Library/Logs/codex-jev-router.*.log` | `~/Library/Logs/hipporoute.*.log` |
 
+The launchd label changed from `com.jev.codex-jev-router` to
+`com.hippo.hipporoute`. **Boot the old job out first, then run
+`scripts/install-service.sh`.** `install-service.sh` only replaces its own label,
+so it does not know about the old one: if `com.jev.codex-jev-router` is still
+loaded, the old plist keeps restarting the pre-rename service from the old path
+and the two jobs race for port 4319 (whichever wins, the other one crash-loops).
+
 To migrate an existing install:
 
 ```bash
-# 1. unload the old launchd labels (the old files stay on disk until you remove them)
+# 1. unload the old service before installing the new one (otherwise two jobs fight for 4319)
 launchctl bootout "gui/$(id -u)/com.jev.codex-jev-router" 2>/dev/null || true
 launchctl bootout "gui/$(id -u)/com.jev.codex-router-loopback-env" 2>/dev/null || true
+# optional: drop the stale plists so nothing reloads them at next login
+rm -f ~/Library/LaunchAgents/com.jev.codex-jev-router.plist
+rm -f ~/Library/LaunchAgents/com.jev.codex-router-loopback-env.plist
 
 # 2. move the state directory, keeping the decisions log and thread state
 mv ~/.codex/codex-jev-router ~/.codex/hipporoute
 
-# 3. reinstall from the renamed checkout, then re-enter shadow mode if you want it
+# 3. install the renamed service (label com.hippo.hipporoute, still port 4319),
+#    then re-enter shadow mode if you want it
 touch ~/.codex/hipporoute/router.shadow
 scripts/install-service.sh
 ```
+
+Verify with `launchctl print "gui/$(id -u)/com.hippo.hipporoute" | grep state` and
+`curl -fsS http://127.0.0.1:4319/health`; `launchctl print` on the old label must
+report that the service is no longer loaded.
 
 If your `config.service.toml` or `config.local.toml` sets `[paths]` explicitly,
 update those values (or regenerate the file from the example) so the service

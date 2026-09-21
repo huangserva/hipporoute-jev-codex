@@ -101,6 +101,25 @@ class ServiceScriptTests(unittest.TestCase):
             self.assertIn(required, script)
         self.assertNotIn("TYPESAFE_API_KEY", script)
 
+    def test_install_service_is_bash_compatible_and_picks_a_stable_python(self):
+        script = self._script("install-service.sh")
+        self.assertTrue(script.startswith("#!/usr/bin/env bash"))
+        self.assertNotIn("print ", script)
+        self.assertNotIn("print -u2", script)
+        self.assertIn("HIPPOROUTE_PYTHON", script)
+        self.assertIn("3, 11", script)
+        self.assertIn("python=%s", script)
+        # `command -v python3` is only the last resort: a virtualenv from another
+        # project must never be the interpreter baked into the plist.
+        order = (
+            "/opt/homebrew/bin/python3",
+            "/usr/local/bin/python3",
+            "/usr/bin/python3",
+            'candidate="$(command -v python3 || true)"',
+        )
+        positions = [script.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+
     def test_service_uses_caller_edge_config_without_embedding_secret(self):
         config = (ROOT / "config.service.example.toml").read_text(encoding="utf-8")
         installer = self._script("install-service.sh")
