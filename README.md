@@ -333,11 +333,21 @@ rm -f ~/Library/LaunchAgents/com.jev.codex-router-loopback-env.plist
 # 2. move the state directory, keeping the decisions log and thread state
 mv ~/.codex/codex-jev-router ~/.codex/hipporoute
 
-# 3. install the renamed service (label com.hippo.hipporoute, still port 4319),
+# 3. point [paths] in config.service.toml at the new directory (state, decision_log,
+#    off, shadow, stream_debug, raw_stream_dir) — otherwise the service recreates an
+#    empty state directory under the old name and ignores the decisions log you moved
+
+# 4. install the renamed service (label com.hippo.hipporoute, still port 4319),
 #    then re-enter shadow mode if you want it
 touch ~/.codex/hipporoute/router.shadow
 scripts/install-service.sh
 ```
+
+Regenerate `config.service.toml` or `config.local.toml` from the examples if you
+would rather not hand-edit `[paths]`. Direct-mode users must also rename the
+provider id in `~/.codex/config.toml`: run `scripts/configure_codex.py restore
+--state <path>` and then `enable` again, and delete a leftover
+`[model_providers.codex-jev-router]` table if an older run left one behind.
 
 Verify with `launchctl print "gui/$(id -u)/com.hippo.hipporoute" | grep state` and
 `curl -fsS http://127.0.0.1:4319/health`; `launchctl print` on the old label must
