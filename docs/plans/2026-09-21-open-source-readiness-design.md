@@ -1,0 +1,10 @@
+# Open-source readiness design
+
+The release pass has four independent surfaces. First, the repository boundary must be safe: only source, tests, examples, and sanitized experiment reports are tracked; runtime captures, service-local configuration, decision logs, backups, and credentials remain ignored. The current tree and every reachable Git commit are scanned separately because cleaning `HEAD` does not remove historical paths or author metadata. History findings are documented with `git filter-repo` commands but history is not rewritten in this task.
+
+Second, key loading becomes explicit and non-embeddable. `TYPESAFE_API_KEY` keeps highest precedence, followed by a configurable `[jev].key_file`, followed by `~/.jev.env`. The TOML schema accepts only a path, never a literal key field. A fully annotated example and `.env.example` explain permissions and deployment choices. Service-local TOML remains on disk but is removed from tracking and ignored; a sanitized `config.service.example.toml` replaces it.
+
+Third, public documentation is organized around a new user's workflow rather than the development diary. The root README is English-first with a compact Chinese guide, direct and Codex Router installation paths, configuration tables, safety caveats, benchmark summary, and rollback. Detailed dated reports move under `docs/experiments/` and are labeled as single-machine experimental records. Absolute home paths, backup hashes, usernames, and machine-specific proxy defaults are replaced with portable placeholders.
+
+Fourth, reporting gains time-window filters without changing aggregation semantics. `--since` accepts an ISO-8601 timestamp and `--hours N` derives a cutoff from the current time; the options are mutually exclusive with each other but may coexist with `--days` only if explicitly rejected to avoid ambiguous precedence. Filtering happens before parent/session aggregation so counts and costs describe only the selected rows. Tests use injected timestamps and timezone-aware values; a real ignored log smoke test validates `--hours 3` without modifying it.
+
